@@ -81,6 +81,11 @@ export async function PUT(
     const updatedAppt = await prisma.appointment.update({
       where: { id: appointmentId },
       data: { status: status as AppointmentStatus },
+      include: {
+        pet: true,
+        vet: { include: { user: { select: { firstName: true, lastName: true } } } },
+        clinic: true,
+      },
     });
 
     // Write an Audit Log for tracking security privileges

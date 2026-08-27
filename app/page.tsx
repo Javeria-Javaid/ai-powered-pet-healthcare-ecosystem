@@ -17,7 +17,7 @@ export default function Home() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // If already logged in, redirect straight to dashboard
+  // Load Google SDK & check current session
   useEffect(() => {
     async function checkAuth() {
       try {
@@ -26,6 +26,8 @@ export default function Home() {
           const data = await res.json();
           if (data.user.role === 'VETERINARIAN') {
             router.push('/vet/dashboard');
+          } else if (data.user.role === 'CLINIC_ADMIN') {
+            router.push('/clinic/dashboard');
           } else {
             router.push('/dashboard');
           }
@@ -35,7 +37,67 @@ export default function Home() {
       }
     }
     checkAuth();
+
+    // Dynamically load Google Identity Services SDK script
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+
+    script.onload = async () => {
+      if ((window as any).google) {
+        try {
+          const configRes = await fetch('/api/auth/google/config');
+          const configData = await configRes.json();
+          const clientId = configData.clientId;
+
+          (window as any).google.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleCallback,
+          });
+          (window as any).google.accounts.id.renderButton(
+            document.getElementById('google-signin-btn'),
+            { theme: 'outline', size: 'large', width: 382 }
+          );
+        } catch (e) {
+          console.error('Failed to load Google OAuth config:', e);
+        }
+      }
+    };
+
+    return () => {
+      document.body.removeChild(script);
+    };
   }, [router]);
+
+  async function handleGoogleCallback(response: any) {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/auth/google/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (data.success) {
+        if (data.user.role === 'VETERINARIAN') {
+          router.push('/vet/dashboard');
+        } else if (data.user.role === 'CLINIC_ADMIN') {
+          router.push('/clinic/dashboard');
+        } else {
+          router.push('/dashboard');
+        }
+      } else {
+        setError(data.error.message || 'Google authentication failed.');
+      }
+    } catch (err) {
+      setLoading(false);
+      setError('Connection error occurred.');
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,6 +122,8 @@ export default function Home() {
       if (data.success) {
         if (data.user.role === 'VETERINARIAN') {
           router.push('/vet/dashboard');
+        } else if (data.user.role === 'CLINIC_ADMIN') {
+          router.push('/clinic/dashboard');
         } else {
           router.push('/dashboard');
         }
@@ -157,6 +221,25 @@ export default function Home() {
             {loading ? 'Processing...' : isRegistering ? 'Sign Up' : 'Sign In'}
           </button>
         </form>
+
+        <div className="my-4 flex items-center justify-between">
+          <span className="w-1/5 border-b border-zinc-200 dark:border-zinc-800"></span>
+          <span className="text-xs uppercase text-zinc-400">or</span>
+          <span className="w-1/5 border-b border-zinc-200 dark:border-zinc-800"></span>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <div id="google-signin-btn" className="flex justify-center w-full"></div>
+          {process.env.NODE_ENV !== 'production' && (
+            <button
+              type="button"
+              onClick={() => handleGoogleCallback({ credential: `mock_google_token_owner-google-${Date.now()}@example.com_Jane_Google` })}
+              className="w-full text-center rounded border border-zinc-300 py-2 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800 bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700"
+            >
+              🚀 Continue with Mock Google (Dev Only)
+            </button>
+          )}
+        </div>
 
         <div className="text-center mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800">
           <button 

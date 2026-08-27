@@ -38,6 +38,32 @@ async function main() {
   const clinicHash = await argon2.hash('ClinicPass123!', { type: argon2.argon2id });
   const adminHash = await argon2.hash('AdminPass123!', { type: argon2.argon2id });
 
+  // 3. Seed Clinics (Seeded first to support referential constraints)
+  console.log('Seeding Clinics...');
+  const clinicA = await prisma.clinic.upsert({
+    where: { id: 'clinic-a-uuid-placeholder' },
+    update: {},
+    create: {
+      id: 'clinic-a-uuid-placeholder',
+      name: 'Green Valley Veterinary Hospital',
+      address: '100 Health Way, Green Valley',
+      phone: '+1555400100',
+      isVerified: true,
+    },
+  });
+
+  const clinicB = await prisma.clinic.upsert({
+    where: { id: 'clinic-b-uuid-placeholder' },
+    update: {},
+    create: {
+      id: 'clinic-b-uuid-placeholder',
+      name: 'Downtown Pet Care Clinic',
+      address: '500 Main Street, Metropolis',
+      phone: '+1555400200',
+      isVerified: true,
+    },
+  });
+
   // 2. Seed Users
   console.log('Seeding Users...');
   const ownerUser = await prisma.user.upsert({
@@ -81,7 +107,9 @@ async function main() {
 
   const clinicUser = await prisma.user.upsert({
     where: { email: 'clinic@example.com' },
-    update: {},
+    update: {
+      clinicId: 'clinic-a-uuid-placeholder',
+    },
     create: {
       email: 'clinic@example.com',
       passwordHash: clinicHash,
@@ -89,6 +117,7 @@ async function main() {
       firstName: 'Charlie',
       lastName: 'Manager',
       phone: '+1555333444',
+      clinicId: 'clinic-a-uuid-placeholder',
     },
   });
 
@@ -102,32 +131,6 @@ async function main() {
       firstName: 'David',
       lastName: 'Platform',
       phone: '+1555555666',
-    },
-  });
-
-  // 3. Seed Clinics
-  console.log('Seeding Clinics...');
-  const clinicA = await prisma.clinic.upsert({
-    where: { id: 'clinic-a-uuid-placeholder' },
-    update: {},
-    create: {
-      id: 'clinic-a-uuid-placeholder',
-      name: 'Green Valley Veterinary Hospital',
-      address: '100 Health Way, Green Valley',
-      phone: '+1555400100',
-      isVerified: true,
-    },
-  });
-
-  const clinicB = await prisma.clinic.upsert({
-    where: { id: 'clinic-b-uuid-placeholder' },
-    update: {},
-    create: {
-      id: 'clinic-b-uuid-placeholder',
-      name: 'Downtown Pet Care Clinic',
-      address: '500 Main Street, Metropolis',
-      phone: '+1555400200',
-      isVerified: true,
     },
   });
 

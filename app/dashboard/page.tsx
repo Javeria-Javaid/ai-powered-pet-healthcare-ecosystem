@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function Dashboard() {
@@ -15,7 +15,7 @@ export default function Dashboard() {
   const [discoveryVets, setDiscoveryVets] = useState<any[]>([]);
   
   // UI states
-  const [activeTab, setActiveTab] = useState<'pets' | 'appointments'>('pets');
+  const [activeTab, setActiveTab] = useState<'pets' | 'appointments' | 'ai'>('pets');
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', phone: '' });
@@ -27,6 +27,14 @@ export default function Dashboard() {
   const [isBookingAppt, setIsBookingAppt] = useState(false);
   const [bookingForm, setBookingForm] = useState({ petId: '', vetId: '', clinicId: '', dateTime: '', reason: '' });
   
+  // AI Health Assistant States
+  const [aiPetId, setAiPetId] = useState('');
+  const [aiConversationId, setAiConversationId] = useState('');
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -51,6 +59,9 @@ export default function Dashboard() {
         if (petsRes.ok) {
           const petsData = await petsRes.json();
           setPets(petsData.pets);
+          if (petsData.pets.length > 0) {
+            setAiPetId(petsData.pets[0].id);
+          }
         }
 
         const apptsRes = await fetch('/api/appointments');
@@ -72,6 +83,33 @@ export default function Dashboard() {
     }
     loadData();
   }, [router]);
+
+  // Scroll to bottom of chat when messages update
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  // Load conversation history for the selected pet
+  useEffect(() => {
+    async function loadChatHistory() {
+      if (!aiPetId) return;
+      setError('');
+      try {
+        const res = await fetch(`/api/ai/chat?petId=${aiPetId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setAiConversationId(data.conversationId || '');
+          setChatMessages(data.messages || []);
+        } else {
+          setChatMessages([]);
+          setAiConversationId('');
+        }
+      } catch (err) {
+        console.error('Failed to load chat history:', err);
+      }
+    }
+    loadChatHistory();
+  }, [aiPetId]);
 
   // Load select pet details and timeline
   async function handleSelectPet(pet: any) {
@@ -187,7 +225,6 @@ export default function Dashboard() {
         setAppointments([data.appointment, ...appointments]);
         setIsBookingAppt(false);
         setBookingForm({ petId: '', vetId: '', clinicId: '', dateTime: '', reason: '' });
-        // Reload appointments to fetch full relational details
         const listRes = await fetch('/api/appointments');
         if (listRes.ok) {
           const listData = await listRes.json();
@@ -212,7 +249,6 @@ export default function Dashboard() {
       const data = await res.json();
       if (data.success) {
         setAppointments(appointments.map(a => a.id === apptId ? data.appointment : a));
-        // Reload list to resolve joins
         const listRes = await fetch('/api/appointments');
         if (listRes.ok) {
           const listData = await listRes.json();
@@ -222,6 +258,50 @@ export default function Dashboard() {
     } catch (err) {
       setError('Failed to cancel appointment.');
     }
+  }
+
+  // AI Assistant Chat operations
+  async function handleSendChatMessage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!chatInput.trim() || aiLoading) return;
+    setError('');
+
+    const userMsg = { role: 'user', content: chatInput };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setAiLoading(true);
+
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: aiConversationId || undefined,
+          petId: aiConversationId ? undefined : aiPetId,
+          message: userMsg.content,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        if (!aiConversationId) {
+          setAiConversationId(data.conversationId);
+        }
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+      } else {
+        setError(data.error.message || 'AI processing failure.');
+      }
+    } catch (err) {
+      setError('AI Chat connection error.');
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function handleResetChat() {
+    setAiConversationId('');
+    setChatMessages([]);
+    setError('');
   }
 
   async function handleLogout() {
@@ -277,6 +357,12 @@ export default function Dashboard() {
             className={`py-3 text-sm font-semibold border-b-2 transition ${activeTab === 'appointments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-zinc-500'}`}
           >
             Appointments & Vet Booking
+          </button>
+          <button 
+            onClick={() => setActiveTab('ai')}
+            className={`py-3 text-sm font-semibold border-b-2 transition ${activeTab === 'ai' ? 'border-blue-600 text-blue-600' : 'border-transparent text-zinc-500'}`}
+          >
+            AI Veterinary Health Assistant
           </button>
         </div>
       </div>
@@ -374,7 +460,7 @@ export default function Dashboard() {
                         className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
                       />
                       <input 
-                        type="text" placeholder="Species (e.g. Dog, Cat)" required value={petForm.species}
+                        type="text" placeholder="Species" required value={petForm.species}
                         onChange={e => setPetForm({ ...petForm, species: e.target.value })}
                         className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
                       />
@@ -595,9 +681,9 @@ export default function Dashboard() {
                           <div>
                             <div className="flex items-center gap-2 mb-1">
                               <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                                appt.status === 'CONFIRMED' ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' :
-                                appt.status === 'CANCELLED' ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300' :
-                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
+                                appt.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
+                                appt.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                                'bg-yellow-100 text-yellow-800'
                               }`}>
                                 {appt.status}
                               </span>
@@ -622,6 +708,123 @@ export default function Dashboard() {
                 </div>
               </div>
             </>
+          )}
+
+          {/* TAB 3: AI ASSISTANT VIEW */}
+          {activeTab === 'ai' && (
+            <div className="md:col-span-3">
+              <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 overflow-hidden flex flex-col h-[600px]">
+                {/* Chat Panel Header */}
+                <div className="border-b border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900 flex justify-between items-center">
+                  <div>
+                    <h2 className="text-sm font-bold text-blue-600 uppercase tracking-wider">AI Veterinary Health Assistant</h2>
+                    <p className="text-xs text-zinc-500 mt-0.5">Reads pet profiles and health charts to answer your questions.</p>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    {!aiConversationId && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-zinc-500">Active Pet Context:</span>
+                        <select 
+                          value={aiPetId} 
+                          onChange={e => setAiPetId(e.target.value)}
+                          className="rounded border border-zinc-300 px-2.5 py-1 text-xs dark:bg-zinc-800"
+                        >
+                          {pets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    <button 
+                      onClick={handleResetChat}
+                      className="rounded bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 text-xs px-2.5 py-1 font-semibold"
+                    >
+                      Reset Chat
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chat Message Lists Thread */}
+                <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4">
+                  {chatMessages.length === 0 ? (
+                    <div className="my-auto text-center max-w-md mx-auto flex flex-col gap-4">
+                      <div>
+                        <p className="font-bold text-zinc-700 dark:text-zinc-300">How can I help you and your pet today?</p>
+                        <p className="text-xs text-zinc-500 mt-1">Ask about diagnostic history, booster vaccine due dates, weight logs, or upcoming appointments.</p>
+                      </div>
+                      
+                      <div className="flex flex-col gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => { setChatInput("Tell me about my pet's health."); }}
+                          className="w-full text-left rounded-lg border border-zinc-200 hover:bg-zinc-50 p-3 text-xs font-medium dark:border-zinc-800 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900"
+                        >
+                          💡 "Tell me about my pet's health."
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setChatInput("What vaccinations does my pet have?"); }}
+                          className="w-full text-left rounded-lg border border-zinc-200 hover:bg-zinc-50 p-3 text-xs font-medium dark:border-zinc-800 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900"
+                        >
+                          💡 "What vaccinations does my pet have?"
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setChatInput("Does my pet have any recorded allergies?"); }}
+                          className="w-full text-left rounded-lg border border-zinc-200 hover:bg-zinc-50 p-3 text-xs font-medium dark:border-zinc-800 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900"
+                        >
+                          💡 "Does my pet have any recorded allergies?"
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setChatInput("Prepare me for my upcoming appointment."); }}
+                          className="w-full text-left rounded-lg border border-zinc-200 hover:bg-zinc-50 p-3 text-xs font-medium dark:border-zinc-800 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900"
+                        >
+                          💡 "Prepare me for my upcoming appointment."
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    chatMessages.map((msg, index) => (
+                      <div 
+                        key={index}
+                        className={`flex flex-col max-w-[80%] rounded-lg p-4 text-sm ${
+                          msg.role === 'user' 
+                            ? 'self-end bg-blue-600 text-white rounded-br-none' 
+                            : 'self-start bg-zinc-200 text-zinc-950 rounded-bl-none dark:bg-zinc-800 dark:text-zinc-50'
+                        }`}
+                      >
+                        <span className="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-70">
+                          {msg.role === 'user' ? 'Owner Query' : 'Health Assistant'}
+                        </span>
+                        <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                      </div>
+                    ))
+                  )}
+                  {aiLoading && (
+                    <div className="self-start bg-zinc-100 rounded-lg p-4 text-sm rounded-bl-none dark:bg-zinc-850 flex items-center gap-2 text-zinc-500">
+                      <span className="animate-pulse">Assistant is querying pet databases...</span>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Chat input box */}
+                <form onSubmit={handleSendChatMessage} className="border-t border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 flex gap-2">
+                  <input 
+                    type="text" required placeholder="Ask about medications, timelines, or vaccines..."
+                    value={chatInput} onChange={e => setChatInput(e.target.value)}
+                    disabled={aiLoading}
+                    className="flex-1 rounded border px-4 py-2 text-sm dark:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  />
+                  <button 
+                    type="submit" disabled={aiLoading}
+                    className="rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-6 py-2 disabled:opacity-50"
+                  >
+                    Send
+                  </button>
+                </form>
+              </div>
+            </div>
           )}
 
         </div>

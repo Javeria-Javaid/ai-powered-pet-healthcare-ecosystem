@@ -117,6 +117,11 @@ export async function POST(req: NextRequest) {
         reason,
         status: 'REQUESTED',
       },
+      include: {
+        pet: true,
+        vet: { include: { user: { select: { firstName: true, lastName: true } } } },
+        clinic: true,
+      },
     });
 
     return NextResponse.json({ success: true, appointment: newAppt }, { status: 201 });

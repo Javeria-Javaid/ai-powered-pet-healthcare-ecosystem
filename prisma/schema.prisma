@@ -30,7 +30,7 @@ enum AppointmentStatus {
 model User {
   id             String                 @id @default(uuid())
   email          String                 @unique
-  passwordHash   String
+  passwordHash   String?
   role           UserRole
   firstName      String
   lastName       String
@@ -48,6 +48,8 @@ model User {
   uploadedDocs   Document[]
   sessions       Session[]
   verifiedVets   Veterinarian[]         @relation("Verifier")
+  clinicId       String?
+  clinic         Clinic?                @relation("ClinicAdmins", fields: [clinicId], references: [id], onDelete: SetNull)
 }
 
 model Session {
@@ -113,6 +115,7 @@ model Clinic {
   vets           VetClinicAssociation[]
   appointments   Appointment[]
   medicalRecords MedicalRecord[]
+  admins         User[]                 @relation("ClinicAdmins")
 }
 
 model VetClinicAssociation {

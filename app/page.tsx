@@ -3,9 +3,19 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
+import Navbar from './components/Navbar';
+import Hero from './components/Hero';
+import AboutSection from './components/AboutSection';
+import CommunitiesSection from './components/CommunitiesSection';
+import HowItWorks from './components/HowItWorks';
+import CTASection from './components/CTASection';
+import Footer from './components/Footer';
+import AuthModal from './components/AuthModal';
+
 export default function Home() {
   const router = useRouter();
-  
+
+  // Auth form states
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,6 +26,9 @@ export default function Home() {
   
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Modal open/close state
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Load Google SDK & check current session
   useEffect(() => {
@@ -56,10 +69,6 @@ export default function Home() {
             client_id: clientId,
             callback: handleGoogleCallback,
           });
-          (window as any).google.accounts.id.renderButton(
-            document.getElementById('google-signin-btn'),
-            { theme: 'outline', size: 'large', width: 382 }
-          );
         } catch (e) {
           console.error('Failed to load Google OAuth config:', e);
         }
@@ -83,6 +92,7 @@ export default function Home() {
       const data = await res.json();
       setLoading(false);
       if (data.success) {
+        setShowAuthModal(false);
         if (data.user.role === 'VETERINARIAN') {
           router.push('/vet/dashboard');
         } else if (data.user.role === 'CLINIC_ADMIN') {
@@ -120,6 +130,7 @@ export default function Home() {
       setLoading(false);
 
       if (data.success) {
+        setShowAuthModal(false);
         if (data.user.role === 'VETERINARIAN') {
           router.push('/vet/dashboard');
         } else if (data.user.role === 'CLINIC_ADMIN') {
@@ -136,123 +147,72 @@ export default function Home() {
     }
   }
 
+  function openLogin() {
+    setIsRegistering(false);
+    setError('');
+    setShowAuthModal(true);
+  }
+
+  function openRegister() {
+    setIsRegistering(true);
+    setError('');
+    setShowAuthModal(true);
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans px-4 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50">
-      <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-blue-600">Pet Healthcare</h1>
-          <p className="text-sm text-zinc-500 mt-1.5">
-            {isRegistering ? 'Create your ecosystem profile' : 'Sign in to access pet health portals'}
-          </p>
-        </div>
+    <div className="flex flex-col min-h-screen bg-white">
+      {/* Navbar Header */}
+      <Navbar onLoginClick={openLogin} onRegisterClick={openRegister} />
 
-        {error && (
-          <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-xs text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
-            {error}
-          </div>
-        )}
+      {/* Main content body */}
+      <main className="flex-grow">
+        {/* Hero Banner */}
+        <Hero onRegisterClick={openRegister} />
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="text-xs font-semibold text-zinc-500 block mb-1">Email Address</label>
-            <input 
-              type="email" required placeholder="owner@example.com"
-              value={email} onChange={e => setEmail(e.target.value)}
-              className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-            />
-          </div>
+        {/* Connected Care Description */}
+        <AboutSection />
 
-          <div>
-            <label className="text-xs font-semibold text-zinc-500 block mb-1">Password</label>
-            <input 
-              type="password" required placeholder="••••••••"
-              value={password} onChange={e => setPassword(e.target.value)}
-              className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-            />
-          </div>
+        {/* Platforms and Features */}
+        <CommunitiesSection
+          onOwnerClick={openRegister}
+          onVetClick={openRegister}
+          onClinicClick={openRegister}
+        />
 
-          {isRegistering && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 block mb-1">First Name</label>
-                  <input 
-                    type="text" required placeholder="Jane"
-                    value={firstName} onChange={e => setFirstName(e.target.value)}
-                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Last Name</label>
-                  <input 
-                    type="text" required placeholder="Owner"
-                    value={lastName} onChange={e => setLastName(e.target.value)}
-                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                  />
-                </div>
-              </div>
+        {/* How It Works Guide */}
+        <HowItWorks />
 
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 block mb-1">Phone Number</label>
-                <input 
-                  type="text" placeholder="+1555000000"
-                  value={phone} onChange={e => setPhone(e.target.value)}
-                  className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                />
-              </div>
+        {/* CTA Before Footer */}
+        <CTASection onRegisterClick={openRegister} />
+      </main>
 
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 block mb-1">Register As</label>
-                <select 
-                  value={role} onChange={e => setRole(e.target.value)}
-                  className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                >
-                  <option value="PET_OWNER">Pet Owner</option>
-                  <option value="VETERINARIAN">Veterinarian</option>
-                </select>
-              </div>
-            </>
-          )}
+      {/* Footer Navigation */}
+      <Footer />
 
-          <button 
-            type="submit" disabled={loading}
-            className="w-full rounded bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 mt-2"
-          >
-            {loading ? 'Processing...' : isRegistering ? 'Sign Up' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="my-4 flex items-center justify-between">
-          <span className="w-1/5 border-b border-zinc-200 dark:border-zinc-800"></span>
-          <span className="text-xs uppercase text-zinc-400">or</span>
-          <span className="w-1/5 border-b border-zinc-200 dark:border-zinc-800"></span>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div id="google-signin-btn" className="flex justify-center w-full"></div>
-          {process.env.NODE_ENV !== 'production' && (
-            <button
-              type="button"
-              onClick={() => handleGoogleCallback({ credential: `mock_google_token_owner-google-${Date.now()}@example.com_Jane_Google` })}
-              className="w-full text-center rounded border border-zinc-300 py-2 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800 bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700"
-            >
-              🚀 Continue with Mock Google (Dev Only)
-            </button>
-          )}
-        </div>
-
-        <div className="text-center mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-          <button 
-            onClick={() => {
-              setIsRegistering(!isRegistering);
-              setError('');
-            }}
-            className="text-xs font-medium text-blue-600 hover:underline"
-          >
-            {isRegistering ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-          </button>
-        </div>
-      </div>
+      {/* Single Unified Auth Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        isRegistering={isRegistering}
+        setIsRegistering={setIsRegistering}
+        email={email}
+        setEmail={setEmail}
+        password={password}
+        setPassword={setPassword}
+        firstName={firstName}
+        setFirstName={setFirstName}
+        lastName={lastName}
+        setLastName={setLastName}
+        phone={phone}
+        setPhone={setPhone}
+        role={role}
+        setRole={setRole}
+        error={error}
+        setError={setError}
+        loading={loading}
+        handleSubmit={handleSubmit}
+        handleGoogleCallback={handleGoogleCallback}
+      />
     </div>
   );
 }

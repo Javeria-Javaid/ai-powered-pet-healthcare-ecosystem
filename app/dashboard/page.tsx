@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 export default function Dashboard() {
   const router = useRouter();
   
-  // Base states
+  // Base states loaded from server APIs
   const [profile, setProfile] = useState<any>(null);
   const [pets, setPets] = useState<any[]>([]);
   const [selectedPet, setSelectedPet] = useState<any>(null);
@@ -14,8 +14,8 @@ export default function Dashboard() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [discoveryVets, setDiscoveryVets] = useState<any[]>([]);
   
-  // UI states
-  const [activeTab, setActiveTab] = useState<'pets' | 'appointments' | 'ai'>('pets');
+  // Navigation & Modals states
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pets' | 'appointments' | 'ai' | 'profile'>('dashboard');
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', phone: '' });
@@ -37,8 +37,9 @@ export default function Dashboard() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
-  // Fetch initial profile and pets and appointments
+  // Fetch initial profile, pets, and appointments
   useEffect(() => {
     async function loadData() {
       try {
@@ -61,6 +62,13 @@ export default function Dashboard() {
           setPets(petsData.pets);
           if (petsData.pets.length > 0) {
             setAiPetId(petsData.pets[0].id);
+            setSelectedPet(petsData.pets[0]);
+            // Fetch initial pet's timeline
+            const timeRes = await fetch(`/api/pets/${petsData.pets[0].id}/timeline`);
+            if (timeRes.ok) {
+              const timeData = await timeRes.json();
+              setTimeline(timeData.timeline);
+            }
           }
         }
 
@@ -93,7 +101,6 @@ export default function Dashboard() {
   useEffect(() => {
     async function loadChatHistory() {
       if (!aiPetId) return;
-      setError('');
       try {
         const res = await fetch(`/api/ai/chat?petId=${aiPetId}`);
         if (res.ok) {
@@ -114,6 +121,7 @@ export default function Dashboard() {
   // Load select pet details and timeline
   async function handleSelectPet(pet: any) {
     setSelectedPet(pet);
+    setAiPetId(pet.id);
     setTimeline([]);
     try {
       const res = await fetch(`/api/pets/${pet.id}/timeline`);
@@ -130,6 +138,7 @@ export default function Dashboard() {
   async function handleUpdateProfile(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setSuccessMsg('');
     try {
       const res = await fetch('/api/profile', {
         method: 'PUT',
@@ -140,6 +149,7 @@ export default function Dashboard() {
       if (data.success) {
         setProfile(data.profile);
         setIsEditingProfile(false);
+        setSuccessMsg('Profile updated successfully.');
       } else {
         setError(data.error.message || 'Failed to update profile.');
       }
@@ -163,6 +173,7 @@ export default function Dashboard() {
         setPets([data.pet, ...pets]);
         setIsAddingPet(false);
         setPetForm({ name: '', species: '', breed: '', gender: '', dateOfBirth: '', weight: '' });
+        handleSelectPet(data.pet);
       } else {
         setError(data.error.message || 'Failed to add pet.');
       }
@@ -201,8 +212,13 @@ export default function Dashboard() {
       if (res.ok) {
         setPets(pets.filter(p => p.id !== petId));
         if (selectedPet?.id === petId) {
-          setSelectedPet(null);
-          setTimeline([]);
+          const remaining = pets.filter(p => p.id !== petId);
+          if (remaining.length > 0) {
+            handleSelectPet(remaining[0]);
+          } else {
+            setSelectedPet(null);
+            setTimeline([]);
+          }
         }
       }
     } catch (err) {
@@ -261,14 +277,15 @@ export default function Dashboard() {
   }
 
   // AI Assistant Chat operations
-  async function handleSendChatMessage(e: React.FormEvent) {
-    e.preventDefault();
-    if (!chatInput.trim() || aiLoading) return;
+  async function handleSendChatMessage(e?: React.FormEvent, customInput?: string) {
+    if (e) e.preventDefault();
+    const inputToSend = customInput || chatInput;
+    if (!inputToSend.trim() || aiLoading) return;
     setError('');
 
-    const userMsg = { role: 'user', content: chatInput };
+    const userMsg = { role: 'user', content: inputToSend };
     setChatMessages(prev => [...prev, userMsg]);
-    setChatInput('');
+    if (!customInput) setChatInput('');
     setAiLoading(true);
 
     try {
@@ -309,526 +326,933 @@ export default function Dashboard() {
       await fetch('/api/auth/logout', { method: 'POST' });
       router.push('/');
     } catch (err) {
-      console.error('Logout error:', err);
+      router.push('/');
     }
   }
 
-  const selectedVet = discoveryVets.find(v => v.id === bookingForm.vetId);
-
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-900">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <p className="text-zinc-500 font-medium">Loading Dashboard...</p>
       </div>
     );
   }
 
+  const upcomingAppt = appointments.find(appt => new Date(appt.dateTime) > new Date() && appt.status !== 'CANCELLED');
+
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
-      {/* Top Navigation */}
-      <header className="border-b border-zinc-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <h1 className="text-xl font-bold tracking-tight text-blue-600">Pet Healthcare Ecosystem</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">
-              Welcome, <span className="font-semibold text-zinc-900 dark:text-zinc-50">{profile?.firstName}</span>
-            </span>
-            <button 
-              onClick={handleLogout}
-              className="rounded bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-            >
-              Sign Out
-            </button>
+    <div className="flex min-h-screen bg-[#f8fafc] font-sans text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
+      
+      {/* 1. LEFT SIDEBAR NAVIGATION */}
+      <aside className="w-60 border-r border-zinc-150 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 flex flex-col justify-between shrink-0">
+        <div className="flex flex-col gap-6">
+          {/* Logo Header */}
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-2xl">🐾</span>
+            <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">PETIVA</span>
           </div>
-        </div>
-      </header>
 
-      {/* Tab Selectors */}
-      <div className="bg-white border-b border-zinc-100 dark:bg-zinc-900 dark:border-zinc-800 px-6">
-        <div className="mx-auto max-w-6xl flex gap-6">
-          <button 
-            onClick={() => setActiveTab('pets')}
-            className={`py-3 text-sm font-semibold border-b-2 transition ${activeTab === 'pets' ? 'border-blue-600 text-blue-600' : 'border-transparent text-zinc-500'}`}
+          {/* Sidebar Menu Links */}
+          <nav className="flex flex-col gap-1.5">
+            <button
+              onClick={() => { setActiveTab('dashboard'); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeTab === 'dashboard'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+              }`}
+            >
+              <span>🏠</span> Dashboard
+            </button>
+            <button
+              onClick={() => { setActiveTab('pets'); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeTab === 'pets'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+              }`}
+            >
+              <span>👥</span> My Pets
+            </button>
+            <button
+              onClick={() => { setActiveTab('appointments'); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeTab === 'appointments'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+              }`}
+            >
+              <span>📅</span> Appointments
+            </button>
+            <button
+              onClick={() => { setActiveTab('ai'); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeTab === 'ai'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+              }`}
+            >
+              <span>🩺</span> AI Assistant
+            </button>
+            <button
+              onClick={() => { setActiveTab('profile'); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeTab === 'profile'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+              }`}
+            >
+              <span>👤</span> Profile
+            </button>
+          </nav>
+        </div>
+
+        {/* Profile Card & Logout */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between border-t border-zinc-100 pt-4 dark:border-zinc-800">
+            <div className="flex items-center gap-2.5">
+              <img
+                src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100"
+                alt="Owner profile avatar"
+                className="h-9 w-9 rounded-full object-cover border border-zinc-200"
+              />
+              <div className="text-left leading-tight">
+                <p className="text-xs font-bold text-zinc-900 dark:text-white">{profile?.firstName} {profile?.lastName}</p>
+                <p className="text-[10px] text-zinc-400 font-medium">Pet Owner</p>
+              </div>
+            </div>
+            <button onClick={() => setActiveTab('profile')} className="text-zinc-400 hover:text-zinc-600">⚙</button>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="w-full border border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition text-zinc-700 dark:text-zinc-300"
           >
-            My Pets & Health Files
-          </button>
-          <button 
-            onClick={() => setActiveTab('appointments')}
-            className={`py-3 text-sm font-semibold border-b-2 transition ${activeTab === 'appointments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-zinc-500'}`}
-          >
-            Appointments & Vet Booking
-          </button>
-          <button 
-            onClick={() => setActiveTab('ai')}
-            className={`py-3 text-sm font-semibold border-b-2 transition ${activeTab === 'ai' ? 'border-blue-600 text-blue-600' : 'border-transparent text-zinc-500'}`}
-          >
-            AI Veterinary Health Assistant
+            🚪 Logout
           </button>
         </div>
-      </div>
+      </aside>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      {/* 2. MIDDLE MAIN WORKSPACE */}
+      <main className="flex-1 p-8 overflow-y-auto max-w-4xl">
         {error && (
-          <div className="mb-6 rounded border border-red-200 bg-red-50 p-4 text-sm text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
             {error}
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-          
-          {/* TAB 1: PETS VIEW */}
-          {activeTab === 'pets' && (
-            <>
-              {/* Left Column: Profile & Pets List */}
-              <div className="flex flex-col gap-8 md:col-span-1">
-                {/* Profile Card */}
-                <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold">Owner Profile</h2>
-                    <button 
-                      onClick={() => {
-                        setIsEditingProfile(!isEditingProfile);
-                        setError('');
-                      }}
-                      className="text-xs font-semibold text-blue-600 hover:underline"
-                    >
-                      {isEditingProfile ? 'Cancel' : 'Edit'}
-                    </button>
-                  </div>
+        {successMsg && (
+          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4 text-xs text-green-600 dark:border-green-800 dark:bg-green-950 dark:text-green-400">
+            {successMsg}
+          </div>
+        )}
 
-                  {isEditingProfile ? (
-                    <form onSubmit={handleUpdateProfile} className="flex flex-col gap-3">
-                      <div>
-                        <label className="text-xs font-medium text-zinc-500 block mb-1">First Name</label>
-                        <input 
-                          type="text" required value={profileForm.firstName} 
-                          onChange={e => setProfileForm({ ...profileForm, firstName: e.target.value })}
-                          className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-zinc-500 block mb-1">Last Name</label>
-                        <input 
-                          type="text" required value={profileForm.lastName} 
-                          onChange={e => setProfileForm({ ...profileForm, lastName: e.target.value })}
-                          className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-zinc-500 block mb-1">Phone</label>
-                        <input 
-                          type="text" value={profileForm.phone} 
-                          onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
-                          className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                        />
-                      </div>
-                      <button type="submit" className="mt-2 w-full rounded bg-blue-600 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
-                        Save Profile
-                      </button>
-                    </form>
-                  ) : (
-                    <div className="text-sm flex flex-col gap-2">
-                      <p><span className="text-zinc-500">Name:</span> {profile?.firstName} {profile?.lastName}</p>
-                      <p><span className="text-zinc-500">Email:</span> {profile?.email}</p>
-                      <p><span className="text-zinc-500">Phone:</span> {profile?.phone || 'Not provided'}</p>
-                    </div>
-                  )}
+        {/* 2.1 DASHBOARD TAB VIEW */}
+        {activeTab === 'dashboard' && (
+          <div className="flex flex-col gap-8">
+            {/* Header Greeting Banner */}
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-black text-zinc-950 dark:text-white leading-tight">Good morning, {profile?.firstName}! 👋</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">Your pets are healthier with PETIVA</p>
+              </div>
+              {/* Notification icon & search headers */}
+              <div className="flex items-center gap-4">
+                <span className="cursor-pointer text-lg">🔍</span>
+                <div className="relative cursor-pointer">
+                  <span className="text-lg">🔔</span>
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-[8px] font-bold w-3 h-3 flex items-center justify-center">3</span>
                 </div>
+                <img
+                  src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100"
+                  alt="Jane Doe profile avatar circular header"
+                  className="h-8 w-8 rounded-full object-cover border border-zinc-200"
+                />
+              </div>
+            </div>
 
-                {/* Pets List */}
-                <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold">My Pets</h2>
-                    <button 
-                      onClick={() => {
-                        setIsAddingPet(true);
-                        setPetForm({ name: '', species: '', breed: '', gender: '', dateOfBirth: '', weight: '' });
-                        setError('');
-                      }}
-                      className="rounded bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+            {/* My Pets list */}
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-base font-bold text-zinc-900 dark:text-white">My Pets</h3>
+                <button
+                  onClick={() => {
+                    setPetForm({ name: '', species: '', breed: '', gender: '', dateOfBirth: '', weight: '' });
+                    setIsAddingPet(true);
+                  }}
+                  className="rounded-full border border-blue-600 px-4 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 transition"
+                >
+                  + Add Pet
+                </button>
+              </div>
+
+              {pets.length === 0 ? (
+                <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+                  <p className="text-sm text-zinc-400 italic">You haven't added a pet yet.</p>
+                </div>
+              ) : (
+                <div className="flex gap-4 overflow-x-auto pb-2">
+                  {pets.map(pet => (
+                    <button
+                      key={pet.id}
+                      onClick={() => handleSelectPet(pet)}
+                      className={`flex items-center gap-3.5 rounded-2xl border p-4 text-left min-w-[210px] transition ${
+                        selectedPet?.id === pet.id
+                          ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
+                          : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 hover:bg-zinc-50'
+                      }`}
                     >
-                      + Add
+                      <img
+                        src={pet.species === 'Cat' 
+                          ? "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=100"
+                          : "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&q=80&w=100"
+                        }
+                        alt={pet.name}
+                        className="h-10 w-10 rounded-full object-cover border border-zinc-150"
+                      />
+                      <div>
+                        <h4 className="font-bold text-sm text-zinc-900 dark:text-white flex items-center gap-1">
+                          {pet.name} <span className="text-xs text-zinc-400">{pet.gender === 'Female' ? '♀' : '♂'}</span>
+                        </h4>
+                        <p className="text-[10px] text-zinc-400 font-medium mt-0.5">{pet.breed || pet.species}</p>
+                        <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-1">
+                          ● Active
+                        </span>
+                      </div>
                     </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Selected Pet Detail Card */}
+            {selectedPet && (
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                <div className="md:col-span-4 h-40 rounded-xl overflow-hidden bg-zinc-100 border border-zinc-150">
+                  <img
+                    src={selectedPet.species === 'Cat' 
+                      ? "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=400"
+                      : "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&q=80&w=400"
+                    }
+                    alt={selectedPet.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="md:col-span-8 flex flex-col gap-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="text-2xl font-black text-zinc-900 dark:text-white flex items-center gap-1.5">
+                        {selectedPet.name} <span className="text-lg text-zinc-400">{selectedPet.gender === 'Female' ? '♀' : '♂'}</span>
+                      </h4>
+                      <p className="text-[11px] text-zinc-400 mt-1">{selectedPet.breed || selectedPet.species} • {selectedPet.gender}</p>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 font-bold dark:bg-green-950 dark:text-green-400">
+                        ● Healthy
+                      </span>
+                      <button
+                        onClick={() => { setActiveTab('pets'); }}
+                        className="rounded-full border border-zinc-200 px-3.5 py-1 text-xs font-semibold hover:bg-zinc-50 dark:border-zinc-800 transition"
+                      >
+                        View Full Profile →
+                      </button>
+                    </div>
                   </div>
 
-                  {isAddingPet && (
-                    <form onSubmit={handleAddPet} className="mb-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col gap-3">
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-blue-600">New Pet</h3>
-                      <input 
-                        type="text" placeholder="Name" required value={petForm.name}
-                        onChange={e => setPetForm({ ...petForm, name: e.target.value })}
-                        className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                      />
-                      <input 
-                        type="text" placeholder="Species" required value={petForm.species}
-                        onChange={e => setPetForm({ ...petForm, species: e.target.value })}
-                        className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                      />
-                      <input 
-                        type="text" placeholder="Breed" value={petForm.breed}
-                        onChange={e => setPetForm({ ...petForm, breed: e.target.value })}
-                        className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                      />
-                      <input 
-                        type="text" placeholder="Gender" value={petForm.gender}
-                        onChange={e => setPetForm({ ...petForm, gender: e.target.value })}
-                        className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                      />
-                      <input 
-                        type="date" value={petForm.dateOfBirth}
-                        onChange={e => setPetForm({ ...petForm, dateOfBirth: e.target.value })}
-                        className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                      />
-                      <input 
-                        type="number" step="0.1" placeholder="Weight (kg)" value={petForm.weight}
-                        onChange={e => setPetForm({ ...petForm, weight: e.target.value })}
-                        className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <button type="button" onClick={() => setIsAddingPet(false)} className="rounded px-2.5 py-1 text-xs bg-zinc-200 dark:bg-zinc-800">Cancel</button>
-                        <button type="submit" className="rounded px-2.5 py-1 text-xs bg-blue-600 text-white font-semibold">Save</button>
-                      </div>
-                    </form>
-                  )}
-
-                  <div className="flex flex-col gap-2">
-                    {pets.map((pet) => (
-                      <div 
-                        key={pet.id} onClick={() => handleSelectPet(pet)}
-                        className={`flex items-center justify-between rounded-lg border p-4 cursor-pointer transition ${selectedPet?.id === pet.id ? 'border-blue-600 bg-blue-50/20' : 'border-zinc-100 hover:bg-zinc-50'}`}
-                      >
-                        <div>
-                          <p className="font-bold text-sm">{pet.name}</p>
-                          <p className="text-xs text-zinc-500">{pet.species} {pet.breed ? `• ${pet.breed}` : ''}</p>
-                        </div>
-                        <button onClick={(e) => { e.stopPropagation(); handleDeletePet(pet.id); }} className="text-zinc-400 hover:text-red-600 text-xs">Delete</button>
-                      </div>
-                    ))}
+                  {/* Health Overview grid */}
+                  <div className="grid grid-cols-4 gap-4 mt-2">
+                    <div className="rounded-xl bg-zinc-50/50 p-3.5 border border-zinc-100 dark:bg-zinc-800/30 dark:border-zinc-800">
+                      <p className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">Vaccinations</p>
+                      <p className="text-[11px] font-bold mt-1 text-green-600 dark:text-green-400">Up to date</p>
+                    </div>
+                    <div className="rounded-xl bg-zinc-50/50 p-3.5 border border-zinc-100 dark:bg-zinc-800/30 dark:border-zinc-800">
+                      <p className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">Medications</p>
+                      <p className="text-[11px] font-bold mt-1 text-orange-600 dark:text-orange-400">1 Active</p>
+                    </div>
+                    <div className="rounded-xl bg-zinc-50/50 p-3.5 border border-zinc-100 dark:bg-zinc-800/30 dark:border-zinc-800">
+                      <p className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">Allergies</p>
+                      <p className="text-[11px] font-bold mt-1 text-purple-600 dark:text-purple-400">None recorded</p>
+                    </div>
+                    <div className="rounded-xl bg-zinc-50/50 p-3.5 border border-zinc-100 dark:bg-zinc-800/30 dark:border-zinc-800">
+                      <p className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">Last Visit</p>
+                      <p className="text-[11px] font-bold mt-1 text-zinc-700 dark:text-zinc-300">10 Jun, 2025</p>
+                    </div>
                   </div>
                 </div>
               </div>
+            )}
 
-              {/* Right Column: Pet Details & History timeline */}
-              <div className="md:col-span-2">
-                {selectedPet ? (
-                  <div className="flex flex-col gap-8">
-                    {/* Detail Card */}
-                    <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                      <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-bold">{selectedPet.name}'s Profile</h2>
-                        <button 
-                          onClick={() => {
-                            setIsEditingPet(!isEditingPet);
-                            setPetForm({
-                              name: selectedPet.name,
-                              species: selectedPet.species,
-                              breed: selectedPet.breed || '',
-                              gender: selectedPet.gender || '',
-                              dateOfBirth: selectedPet.dateOfBirth ? selectedPet.dateOfBirth.split('T')[0] : '',
-                              weight: selectedPet.weight ? selectedPet.weight.toString() : '',
-                            });
-                          }}
-                          className="text-xs font-semibold text-blue-600 hover:underline"
-                        >
-                          {isEditingPet ? 'Cancel' : 'Edit Info'}
-                        </button>
+            {/* Upcoming Appointment & Recent Activity */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Upcoming Appointment */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-base font-bold text-zinc-900 dark:text-white">Upcoming Appointment</h3>
+                  <button onClick={() => { setActiveTab('appointments'); }} className="text-xs text-blue-600 font-semibold hover:underline">View all</button>
+                </div>
+
+                {upcomingAppt ? (
+                  <div className="rounded-xl border border-zinc-150 p-4 bg-[#fcfdfe]/50 flex flex-col gap-4">
+                    <div className="flex gap-4">
+                      <div className="h-16 w-16 rounded-xl overflow-hidden bg-zinc-100 border border-zinc-150 shrink-0">
+                        <img
+                          src="https://images.unsplash.com/photo-1584132967334-10e028bd69f7?auto=format&fit=crop&q=80&w=200"
+                          alt="Veterinary clinic office"
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-
-                      {isEditingPet ? (
-                        <form onSubmit={handleEditPet} className="grid grid-cols-2 gap-4">
-                          <input type="text" placeholder="Name" required value={petForm.name} onChange={e => setPetForm({ ...petForm, name: e.target.value })} className="rounded border px-3 py-1.5 text-sm dark:bg-zinc-800" />
-                          <input type="text" placeholder="Species" required value={petForm.species} onChange={e => setPetForm({ ...petForm, species: e.target.value })} className="rounded border px-3 py-1.5 text-sm dark:bg-zinc-800" />
-                          <input type="text" placeholder="Breed" value={petForm.breed} onChange={e => setPetForm({ ...petForm, breed: e.target.value })} className="rounded border px-3 py-1.5 text-sm dark:bg-zinc-800" />
-                          <input type="text" placeholder="Gender" value={petForm.gender} onChange={e => setPetForm({ ...petForm, gender: e.target.value })} className="rounded border px-3 py-1.5 text-sm dark:bg-zinc-800" />
-                          <input type="date" value={petForm.dateOfBirth} onChange={e => setPetForm({ ...petForm, dateOfBirth: e.target.value })} className="rounded border px-3 py-1.5 text-sm dark:bg-zinc-800" />
-                          <input type="number" step="0.1" placeholder="Weight" value={petForm.weight} onChange={e => setPetForm({ ...petForm, weight: e.target.value })} className="rounded border px-3 py-1.5 text-sm dark:bg-zinc-800" />
-                          <div className="col-span-2 flex justify-end">
-                            <button type="submit" className="rounded bg-blue-600 px-4 py-1.5 text-xs text-white font-semibold">Save Details</button>
-                          </div>
-                        </form>
-                      ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                          <div><span className="text-zinc-500 text-xs block">Breed</span> <span className="font-semibold">{selectedPet.breed || 'N/A'}</span></div>
-                          <div><span className="text-zinc-500 text-xs block">Gender</span> <span className="font-semibold">{selectedPet.gender || 'N/A'}</span></div>
-                          <div><span className="text-zinc-500 text-xs block">Weight</span> <span className="font-semibold">{selectedPet.weight ? `${selectedPet.weight} kg` : 'N/A'}</span></div>
-                          <div><span className="text-zinc-500 text-xs block">DOB</span> <span className="font-semibold">{selectedPet.dateOfBirth ? new Date(selectedPet.dateOfBirth).toLocaleDateString() : 'N/A'}</span></div>
+                      <div className="flex-grow">
+                        <div className="flex justify-between items-start">
+                          <h4 className="font-bold text-sm text-zinc-900 dark:text-white">{upcomingAppt.pet.name} – General Checkup</h4>
+                          <span className="text-[9px] px-2 py-0.5 rounded font-bold bg-green-100 text-green-700">
+                            {upcomingAppt.status}
+                          </span>
                         </div>
-                      )}
+                        <p className="text-xs text-zinc-500 mt-1">Vet: Dr. {upcomingAppt.vet.user.firstName} {upcomingAppt.vet.user.lastName}</p>
+                        <p className="text-xs text-zinc-400">Clinic: {upcomingAppt.clinic.name}</p>
+                        <p className="text-xs text-blue-600 font-semibold mt-2.5 flex items-center gap-1">
+                          <span>📅</span> {new Date(upcomingAppt.dateTime).toLocaleDateString()} • <span>🕒</span> {new Date(upcomingAppt.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
                     </div>
 
-                    {/* Timeline */}
-                    <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                      <h2 className="text-lg font-bold mb-4">Timeline</h2>
-                      {timeline.length === 0 ? (
-                        <p className="text-xs text-zinc-500 text-center py-4">No events logged.</p>
-                      ) : (
-                        <div className="relative border-l border-zinc-200 pl-6 ml-3 flex flex-col gap-6 dark:border-zinc-800">
-                          {timeline.map((event, idx) => (
-                            <div key={idx} className="relative">
-                              <div className="absolute -left-[31px] top-1.5 h-3.5 w-3.5 rounded-full border bg-white border-blue-600 dark:bg-zinc-900" />
-                              <div className="flex justify-between text-xs text-zinc-400 mb-1">
-                                <span className="font-bold text-blue-600 uppercase">{event.type}</span>
-                                <span>{new Date(event.date).toLocaleDateString()}</span>
-                              </div>
-                              <p className="font-bold text-sm">{event.title}</p>
-                              {event.description && <p className="text-xs text-zinc-500 mt-1">{event.description}</p>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                    <div className="flex gap-2 justify-end mt-2 pt-2 border-t border-zinc-100">
+                      <button
+                        onClick={() => handleCancelAppt(upcomingAppt.id)}
+                        className="rounded-lg border border-red-200 px-4 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed p-12 text-center text-zinc-400">
-                    Select a pet profile from the list to view its medical records.
+                  <div className="text-center py-8">
+                    <p className="text-xs text-zinc-400 italic">No upcoming appointments</p>
+                    <button
+                      onClick={() => {
+                        setBookingForm({ petId: selectedPet?.id || '', vetId: '', clinicId: '', dateTime: '', reason: '' });
+                        setIsBookingAppt(true);
+                      }}
+                      className="mt-4 rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                    >
+                      Book Appointment
+                    </button>
                   </div>
                 )}
               </div>
-            </>
-          )}
 
-          {/* TAB 2: APPOINTMENTS VIEW */}
-          {activeTab === 'appointments' && (
-            <>
-              {/* Left Column: Booking Form */}
-              <div className="flex flex-col gap-8 md:col-span-1">
-                <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                  <h2 className="text-lg font-bold mb-4">Book New Appointment</h2>
-                  
-                  <form onSubmit={handleBookAppt} className="flex flex-col gap-3">
-                    <div>
-                      <label className="text-xs text-zinc-500 block mb-1">Select Pet</label>
-                      <select 
-                        required value={bookingForm.petId}
-                        onChange={e => setBookingForm({ ...bookingForm, petId: e.target.value })}
-                        className="w-full rounded border px-3 py-1.5 text-sm dark:bg-zinc-800"
-                      >
-                        <option value="">-- Choose Pet --</option>
-                        {pets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-zinc-500 block mb-1">Select Veterinarian</label>
-                      <select 
-                        required value={bookingForm.vetId}
-                        onChange={e => {
-                          const vId = e.target.value;
-                          setBookingForm({ ...bookingForm, vetId: vId, clinicId: '' });
-                        }}
-                        className="w-full rounded border px-3 py-1.5 text-sm dark:bg-zinc-800"
-                      >
-                        <option value="">-- Choose Vet --</option>
-                        {discoveryVets.map(v => (
-                          <option key={v.id} value={v.id}>
-                            Dr. {v.lastName} ({v.specialization || 'General'}) {v.isVerified ? '✓' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {selectedVet && (
-                      <div>
-                        <label className="text-xs text-zinc-500 block mb-1">Select Clinic</label>
-                        <select 
-                          required value={bookingForm.clinicId}
-                          onChange={e => setBookingForm({ ...bookingForm, clinicId: e.target.value })}
-                          className="w-full rounded border px-3 py-1.5 text-sm dark:bg-zinc-800"
-                        >
-                          <option value="">-- Choose Clinic --</option>
-                          {selectedVet.clinics.map((c: any) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="text-xs text-zinc-500 block mb-1">Date & Time</label>
-                      <input 
-                        type="datetime-local" required value={bookingForm.dateTime}
-                        onChange={e => setBookingForm({ ...bookingForm, dateTime: e.target.value })}
-                        className="w-full rounded border px-3 py-1.5 text-sm dark:bg-zinc-800"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-zinc-500 block mb-1">Reason for Visit</label>
-                      <input 
-                        type="text" required placeholder="Annual vaccination" value={bookingForm.reason}
-                        onChange={e => setBookingForm({ ...bookingForm, reason: e.target.value })}
-                        className="w-full rounded border px-3 py-1.5 text-sm dark:bg-zinc-800"
-                      />
-                    </div>
-
-                    <button type="submit" className="mt-2 w-full rounded bg-blue-600 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
-                      Request Slot
-                    </button>
-                  </form>
+              {/* Recent Health Activity Timeline */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-base font-bold text-zinc-900 dark:text-white">Recent Health Activity</h3>
+                  <button onClick={() => { setActiveTab('pets'); }} className="text-xs text-blue-600 font-semibold hover:underline">View history</button>
                 </div>
-              </div>
 
-              {/* Right Column: Appointments List */}
-              <div className="md:col-span-2 flex flex-col gap-6">
-                <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                  <h2 className="text-lg font-bold mb-4">My Booked Appointments</h2>
-                  {appointments.length === 0 ? (
-                    <p className="text-xs text-zinc-500 py-4 text-center">No upcoming appointments booked.</p>
-                  ) : (
-                    <div className="flex flex-col gap-4">
-                      {appointments.map((appt) => (
-                        <div key={appt.id} className="rounded-lg border p-4 flex items-center justify-between border-zinc-150 dark:border-zinc-800">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                                appt.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
-                                appt.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-                                'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {appt.status}
-                              </span>
-                              <span className="text-xs text-zinc-400">{new Date(appt.dateTime).toLocaleString()}</span>
-                            </div>
-                            <h3 className="font-bold text-sm">Pet: {appt.pet.name}</h3>
-                            <p className="text-xs text-zinc-600 mt-1">Vet: Dr. {appt.vet.user.lastName} • Clinic: {appt.clinic.name}</p>
-                            <p className="text-xs text-zinc-500 italic mt-1">Reason: {appt.reason}</p>
-                          </div>
-                          {appt.status !== 'CANCELLED' && appt.status !== 'COMPLETED' && (
-                            <button 
-                              onClick={() => handleCancelAppt(appt.id)}
-                              className="rounded bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 text-xs font-semibold"
-                            >
-                              Cancel
-                            </button>
-                          )}
+                {timeline.length === 0 ? (
+                  <p className="text-xs text-zinc-400 italic py-6">No health activities recorded.</p>
+                ) : (
+                  <div className="flex flex-col gap-4 relative pl-4 border-l-2 border-dashed border-zinc-150 ml-2">
+                    {timeline.slice(0, 3).map((item, idx) => (
+                      <div key={idx} className="relative flex gap-3 items-start mb-2">
+                        {/* Dot indicator */}
+                        <div className="absolute -left-[23px] top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-blue-600 shadow-sm flex items-center justify-center">
+                          <span className="text-[7px] text-white">●</span>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* TAB 3: AI ASSISTANT VIEW */}
-          {activeTab === 'ai' && (
-            <div className="md:col-span-3">
-              <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 overflow-hidden flex flex-col h-[600px]">
-                {/* Chat Panel Header */}
-                <div className="border-b border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900 flex justify-between items-center">
-                  <div>
-                    <h2 className="text-sm font-bold text-blue-600 uppercase tracking-wider">AI Veterinary Health Assistant</h2>
-                    <p className="text-xs text-zinc-500 mt-0.5">Reads pet profiles and health charts to answer your questions.</p>
+                        <div>
+                          <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                            {item.symptoms ? `Diagnosis: ${item.diagnosis || 'Health update'}` : `Vaccination logged`}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 mt-0.5">
+                            {item.symptoms ? `Symptoms: ${item.symptoms}` : `Treatment: ${item.treatmentPlan}`} • {new Date(item.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  
-                  <div className="flex items-center gap-3">
-                    {!aiConversationId && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-zinc-500">Active Pet Context:</span>
-                        <select 
-                          value={aiPetId} 
-                          onChange={e => setAiPetId(e.target.value)}
-                          className="rounded border border-zinc-300 px-2.5 py-1 text-xs dark:bg-zinc-800"
-                        >
-                          {pets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                      </div>
-                    )}
-                    <button 
-                      onClick={handleResetChat}
-                      className="rounded bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 text-xs px-2.5 py-1 font-semibold"
-                    >
-                      Reset Chat
-                    </button>
-                  </div>
-                </div>
-
-                {/* Chat Message Lists Thread */}
-                <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4">
-                  {chatMessages.length === 0 ? (
-                    <div className="my-auto text-center max-w-md mx-auto flex flex-col gap-4">
-                      <div>
-                        <p className="font-bold text-zinc-700 dark:text-zinc-300">How can I help you and your pet today?</p>
-                        <p className="text-xs text-zinc-500 mt-1">Ask about diagnostic history, booster vaccine due dates, weight logs, or upcoming appointments.</p>
-                      </div>
-                      
-                      <div className="flex flex-col gap-2 mt-2">
-                        <button
-                          type="button"
-                          onClick={() => { setChatInput("Tell me about my pet's health."); }}
-                          className="w-full text-left rounded-lg border border-zinc-200 hover:bg-zinc-50 p-3 text-xs font-medium dark:border-zinc-800 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900"
-                        >
-                          💡 "Tell me about my pet's health."
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setChatInput("What vaccinations does my pet have?"); }}
-                          className="w-full text-left rounded-lg border border-zinc-200 hover:bg-zinc-50 p-3 text-xs font-medium dark:border-zinc-800 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900"
-                        >
-                          💡 "What vaccinations does my pet have?"
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setChatInput("Does my pet have any recorded allergies?"); }}
-                          className="w-full text-left rounded-lg border border-zinc-200 hover:bg-zinc-50 p-3 text-xs font-medium dark:border-zinc-800 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900"
-                        >
-                          💡 "Does my pet have any recorded allergies?"
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setChatInput("Prepare me for my upcoming appointment."); }}
-                          className="w-full text-left rounded-lg border border-zinc-200 hover:bg-zinc-50 p-3 text-xs font-medium dark:border-zinc-800 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900"
-                        >
-                          💡 "Prepare me for my upcoming appointment."
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    chatMessages.map((msg, index) => (
-                      <div 
-                        key={index}
-                        className={`flex flex-col max-w-[80%] rounded-lg p-4 text-sm ${
-                          msg.role === 'user' 
-                            ? 'self-end bg-blue-600 text-white rounded-br-none' 
-                            : 'self-start bg-zinc-200 text-zinc-950 rounded-bl-none dark:bg-zinc-800 dark:text-zinc-50'
-                        }`}
-                      >
-                        <span className="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-70">
-                          {msg.role === 'user' ? 'Owner Query' : 'Health Assistant'}
-                        </span>
-                        <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                      </div>
-                    ))
-                  )}
-                  {aiLoading && (
-                    <div className="self-start bg-zinc-100 rounded-lg p-4 text-sm rounded-bl-none dark:bg-zinc-850 flex items-center gap-2 text-zinc-500">
-                      <span className="animate-pulse">Assistant is querying pet databases...</span>
-                    </div>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Chat input box */}
-                <form onSubmit={handleSendChatMessage} className="border-t border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 flex gap-2">
-                  <input 
-                    type="text" required placeholder="Ask about medications, timelines, or vaccines..."
-                    value={chatInput} onChange={e => setChatInput(e.target.value)}
-                    disabled={aiLoading}
-                    className="flex-1 rounded border px-4 py-2 text-sm dark:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-blue-600"
-                  />
-                  <button 
-                    type="submit" disabled={aiLoading}
-                    className="rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-6 py-2 disabled:opacity-50"
-                  >
-                    Send
-                  </button>
-                </form>
+                )}
               </div>
             </div>
-          )}
 
-        </div>
+            {/* Quick Actions */}
+            <div>
+              <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-4">Quick Actions</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => {
+                    setPetForm({ name: '', species: '', breed: '', gender: '', dateOfBirth: '', weight: '' });
+                    setIsAddingPet(true);
+                  }}
+                  className="rounded-xl border border-zinc-200 bg-white p-4.5 hover:bg-zinc-50 flex justify-between items-center text-left transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🐾</span>
+                    <div>
+                      <h4 className="font-bold text-xs text-zinc-900 dark:text-white">Add New Pet</h4>
+                      <p className="text-[10px] text-zinc-400 mt-0.5 font-medium">Register a new pet</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-400 font-bold">&gt;</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setBookingForm({ petId: selectedPet?.id || '', vetId: '', clinicId: '', dateTime: '', reason: '' });
+                    setIsBookingAppt(true);
+                  }}
+                  className="rounded-xl border border-zinc-200 bg-white p-4.5 hover:bg-zinc-50 flex justify-between items-center text-left transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📅</span>
+                    <div>
+                      <h4 className="font-bold text-xs text-zinc-900 dark:text-white">Book Appointment</h4>
+                      <p className="text-[10px] text-zinc-400 mt-0.5 font-medium">Schedule a visit for your pet</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-400 font-bold">&gt;</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2.2 MY PETS PORTFOLIO TAB */}
+        {activeTab === 'pets' && (
+          <div className="flex flex-col gap-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold">My Pets Portfolio</h3>
+              <button
+                onClick={() => {
+                  setPetForm({ name: '', species: '', breed: '', gender: '', dateOfBirth: '', weight: '' });
+                  setIsAddingPet(true);
+                }}
+                className="rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+              >
+                + Add Pet
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {pets.map(pet => (
+                <div key={pet.id} className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 flex flex-col gap-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="text-lg font-bold">{pet.name} {pet.gender === 'Female' ? '♀' : '♂'}</h4>
+                      <p className="text-xs text-zinc-400">{pet.breed || pet.species} • {pet.gender}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedPet(pet);
+                          setPetForm({
+                            name: pet.name,
+                            species: pet.species,
+                            breed: pet.breed || '',
+                            gender: pet.gender || '',
+                            dateOfBirth: pet.dateOfBirth ? new Date(pet.dateOfBirth).toISOString().split('T')[0] : '',
+                            weight: pet.weight ? pet.weight.toString() : '',
+                          });
+                          setIsEditingPet(true);
+                        }}
+                        className="text-xs text-blue-600 font-semibold hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeletePet(pet.id)}
+                        className="text-xs text-red-600 font-semibold hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 2.3 APPOINTMENTS PORTAL */}
+        {activeTab === 'appointments' && (
+          <div className="flex flex-col gap-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold">Appointments Portal</h3>
+              <button
+                onClick={() => {
+                  setBookingForm({ petId: selectedPet?.id || '', vetId: '', clinicId: '', dateTime: '', reason: '' });
+                  setIsBookingAppt(true);
+                }}
+                className="rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+              >
+                Book Appointment
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {appointments.map(appt => (
+                <div key={appt.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <span className="text-xs text-zinc-400">{new Date(appt.dateTime).toLocaleString()}</span>
+                      <h4 className="font-bold text-sm mt-1">Pet: {appt.pet.name}</h4>
+                    </div>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                      appt.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' :
+                      appt.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {appt.status}
+                    </span>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    <p>🩺 <strong>Vet:</strong> Dr. {appt.vet.user.firstName} {appt.vet.user.lastName}</p>
+                    <p>🏥 <strong>Clinic:</strong> {appt.clinic.name}</p>
+                    <p className="mt-1">📋 <strong>Reason:</strong> {appt.reason}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 2.4 AI ASSISTANT FULL PORTAL VIEW */}
+        {activeTab === 'ai' && (
+          <div className="flex flex-col gap-6 h-[550px] border border-zinc-200 rounded-2xl bg-white shadow-sm overflow-hidden dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="p-4 border-b border-zinc-150 bg-[#fbfcfd]/50 flex justify-between items-center dark:border-zinc-800 dark:bg-zinc-900">
+              <div>
+                <h3 className="font-bold text-sm">🩺 AI Veterinary Health Assistant</h3>
+                <p className="text-[10px] text-zinc-400 mt-0.5">Focus: {selectedPet?.name || 'All pets'}</p>
+              </div>
+              <button
+                onClick={handleResetChat}
+                className="text-xs font-semibold text-zinc-500 hover:text-blue-600 transition"
+              >
+                🔄 Reset Chat
+              </button>
+            </div>
+
+            <div className="flex-grow p-6 overflow-y-auto flex flex-col gap-4">
+              {chatMessages.length === 0 ? (
+                <div className="my-auto text-center flex flex-col items-center gap-3">
+                  <span className="text-3xl">🤖</span>
+                  <p className="text-sm font-semibold text-zinc-500">How can I help you with your pet's health today?</p>
+                </div>
+              ) : (
+                chatMessages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`max-w-[75%] rounded-2xl p-4 text-sm ${
+                      msg.role === 'user'
+                        ? 'ml-auto bg-blue-600 text-white rounded-br-none'
+                        : 'mr-auto bg-zinc-100 text-zinc-800 rounded-bl-none dark:bg-zinc-800 dark:text-zinc-200'
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                ))
+              )}
+              {aiLoading && (
+                <div className="mr-auto bg-zinc-100 text-zinc-500 rounded-2xl rounded-bl-none p-4 text-xs italic dark:bg-zinc-800">
+                  Checking database logs...
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <form onSubmit={handleSendChatMessage} className="p-4 border-t border-zinc-150 dark:border-zinc-800 flex gap-2">
+              <input
+                type="text" required placeholder="Ask a health query..."
+                value={chatInput} onChange={e => setChatInput(e.target.value)}
+                className="flex-grow rounded-full border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 focus:outline-none focus:border-blue-600"
+              />
+              <button
+                type="submit" disabled={aiLoading}
+                className="rounded-full bg-blue-600 px-5 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Send
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* 2.5 OWNER PROFILE VIEW */}
+        {activeTab === 'profile' && (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm max-w-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">Owner Profile Settings</h3>
+              <button
+                onClick={() => {
+                  setIsEditingProfile(!isEditingProfile);
+                  setError('');
+                }}
+                className="text-xs font-semibold text-blue-600 hover:underline"
+              >
+                {isEditingProfile ? 'Cancel' : 'Edit Profile'}
+              </button>
+            </div>
+
+            {isEditingProfile ? (
+              <form onSubmit={handleUpdateProfile} className="flex flex-col gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">First Name</label>
+                  <input
+                    type="text" required
+                    value={profileForm.firstName} onChange={e => setProfileForm({ ...profileForm, firstName: e.target.value })}
+                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Last Name</label>
+                  <input
+                    type="text" required
+                    value={profileForm.lastName} onChange={e => setProfileForm({ ...profileForm, lastName: e.target.value })}
+                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Contact Phone</label>
+                  <input
+                    type="text"
+                    value={profileForm.phone} onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
+                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="rounded-full bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition w-full"
+                >
+                  Save Changes
+                </button>
+              </form>
+            ) : (
+              <div className="flex flex-col gap-4 text-sm">
+                <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                  <p className="text-xs text-zinc-400">First Name</p>
+                  <p className="font-semibold mt-0.5">{profile?.firstName}</p>
+                </div>
+                <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                  <p className="text-xs text-zinc-400">Last Name</p>
+                  <p className="font-semibold mt-0.5">{profile?.lastName}</p>
+                </div>
+                <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                  <p className="text-xs text-zinc-400">Email Address</p>
+                  <p className="font-semibold mt-0.5">{profile?.email}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400">Contact Phone</p>
+                  <p className="font-semibold mt-0.5">{profile?.phone || 'Not Specified'}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </main>
+
+      {/* 3. RIGHT SIDEBAR: AI HEALTH ASSISTANT (DESKTOP PANEL) */}
+      <aside className="w-80 border-l border-zinc-150 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900 hidden xl:flex flex-col justify-between shrink-0">
+        <div>
+          {/* Header */}
+          <div className="mb-5">
+            <div className="flex items-center gap-2">
+              <span className="text-blue-600 font-bold text-sm">🩺</span>
+              <h3 className="font-bold text-sm text-zinc-900 dark:text-white">AI Veterinary Health Assistant</h3>
+              <span className="bg-blue-600 text-white font-black text-[9px] px-1 py-0.5 rounded-sm uppercase tracking-wider">AI</span>
+            </div>
+            <p className="text-[10px] text-zinc-400 mt-1.5 leading-relaxed">
+              Ask PETIVA about {selectedPet?.name || 'your pets'} using their recorded health history.
+            </p>
+          </div>
+
+          {/* Active Pet Selector */}
+          <div className="mb-6">
+            <label className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Active Pet</label>
+            <select
+              value={aiPetId}
+              onChange={e => {
+                setAiPetId(e.target.value);
+                const matched = pets.find(p => p.id === e.target.value);
+                if (matched) setSelectedPet(matched);
+              }}
+              className="w-full mt-1 rounded-xl border border-zinc-250 px-3 py-2.5 text-xs font-semibold dark:border-zinc-700 dark:bg-zinc-800 focus:outline-none"
+            >
+              {pets.map(p => (
+                <option key={p.id} value={p.id}>{p.name} - {p.breed || p.species}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Welcome chat bubble */}
+          <div className="mb-6 p-4 rounded-2xl bg-blue-50/50 border border-blue-50 text-xs text-zinc-700 dark:bg-blue-950/20 dark:border-blue-900 dark:text-zinc-300 flex gap-3 leading-relaxed">
+            <span className="text-lg shrink-0">🐾</span>
+            <p>
+              Hi {profile?.firstName}! 👋 I'm PETIVA AI. Ask me anything about {selectedPet?.name || "your pet"}'s health, vaccinations, medications or upcoming appointments.
+            </p>
+          </div>
+
+          {/* Try Asking preset prompts */}
+          <div className="flex flex-col gap-2">
+            <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider mb-1">Try asking</p>
+            <button
+              onClick={() => handleSendChatMessage(undefined, `Tell me about my pet's health`)}
+              className="w-full text-left bg-[#fcfdfe] border border-zinc-200 rounded-xl p-3 text-[11px] font-semibold hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-800 dark:hover:bg-zinc-800 transition flex justify-between items-center"
+            >
+              <span className="flex items-center gap-2">🐾 Tell me about my pet's health</span>
+              <span className="text-zinc-400">&gt;</span>
+            </button>
+            <button
+              onClick={() => handleSendChatMessage(undefined, `What vaccinations does my pet have?`)}
+              className="w-full text-left bg-[#fcfdfe] border border-zinc-200 rounded-xl p-3 text-[11px] font-semibold hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-800 dark:hover:bg-zinc-800 transition flex justify-between items-center"
+            >
+              <span className="flex items-center gap-2">🛡️ What vaccinations does my pet have?</span>
+              <span className="text-zinc-400">&gt;</span>
+            </button>
+            <button
+              onClick={() => handleSendChatMessage(undefined, `Does my pet have any allergies?`)}
+              className="w-full text-left bg-[#fcfdfe] border border-zinc-200 rounded-xl p-3 text-[11px] font-semibold hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-800 dark:hover:bg-zinc-800 transition flex justify-between items-center"
+            >
+              <span className="flex items-center gap-2">💊 Does my pet have any allergies?</span>
+              <span className="text-zinc-400">&gt;</span>
+            </button>
+            <button
+              onClick={() => handleSendChatMessage(undefined, `Prepare me for my upcoming appointment`)}
+              className="w-full text-left bg-[#fcfdfe] border border-zinc-200 rounded-xl p-3 text-[11px] font-semibold hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-800 dark:hover:bg-zinc-800 transition flex justify-between items-center"
+            >
+              <span className="flex items-center gap-2">📅 Prepare me for my upcoming appointment</span>
+              <span className="text-zinc-400">&gt;</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Input box bottom promo */}
+        <div className="border-t border-zinc-100 pt-4 flex flex-col gap-3">
+          <button
+            onClick={() => { setActiveTab('ai'); }}
+            className="w-full rounded-full bg-blue-600 py-3 text-xs font-bold text-white text-center hover:bg-blue-700 shadow-md shadow-blue-500/10 transition block"
+          >
+            💬 Open AI Assistant Chat
+          </button>
+          <div className="rounded-xl bg-blue-50/20 border border-blue-50/40 p-3.5 flex items-start gap-2.5">
+            <span className="text-sm">🐾</span>
+            <div className="text-[10px] leading-relaxed text-zinc-500">
+              <p className="font-bold text-zinc-700">Better data. Healthier pets.</p>
+              <p className="mt-0.5 text-zinc-400">Keep health records up to date for smarter care & early insights.</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* 4. DIALOG MODALS */}
+      
+      {/* 4.1 ADD PET DIALOG OVERLAY */}
+      {isAddingPet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-955 flex flex-col gap-4 text-zinc-900 dark:text-zinc-50">
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="text-lg font-bold">Add a New Pet</h3>
+              <button onClick={() => setIsAddingPet(false)} className="text-zinc-400 hover:text-zinc-600 font-bold">✕</button>
+            </div>
+
+            <form onSubmit={handleAddPet} className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Pet Name</label>
+                <input
+                  type="text" required placeholder="e.g. Milo"
+                  value={petForm.name} onChange={e => setPetForm({ ...petForm, name: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:border-blue-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Species</label>
+                  <select
+                    value={petForm.species} onChange={e => setPetForm({ ...petForm, species: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  >
+                    <option value="">Select...</option>
+                    <option value="Dog">Dog</option>
+                    <option value="Cat">Cat</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Breed</label>
+                  <input
+                    type="text" placeholder="Siamese"
+                    value={petForm.breed} onChange={e => setPetForm({ ...petForm, breed: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Gender</label>
+                  <select
+                    value={petForm.gender} onChange={e => setPetForm({ ...petForm, gender: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  >
+                    <option value="">Select...</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Weight (kg)</label>
+                  <input
+                    type="number" step="0.1" placeholder="4.5"
+                    value={petForm.weight} onChange={e => setPetForm({ ...petForm, weight: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Date of Birth</label>
+                <input
+                  type="date"
+                  value={petForm.dateOfBirth} onChange={e => setPetForm({ ...petForm, dateOfBirth: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Add Pet
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4.2 EDIT PET DIALOG OVERLAY */}
+      {isEditingPet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-955 flex flex-col gap-4 text-zinc-900 dark:text-zinc-50">
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="text-lg font-bold">Edit Pet Details</h3>
+              <button onClick={() => setIsEditingPet(false)} className="text-zinc-400 hover:text-zinc-600 font-bold">✕</button>
+            </div>
+
+            <form onSubmit={handleEditPet} className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Pet Name</label>
+                <input
+                  type="text" required
+                  value={petForm.name} onChange={e => setPetForm({ ...petForm, name: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Species</label>
+                  <select
+                    value={petForm.species} onChange={e => setPetForm({ ...petForm, species: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  >
+                    <option value="Dog">Dog</option>
+                    <option value="Cat">Cat</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Breed</label>
+                  <input
+                    type="text"
+                    value={petForm.breed} onChange={e => setPetForm({ ...petForm, breed: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Save Details
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4.3 BOOK APPOINTMENT DIALOG OVERLAY */}
+      {isBookingAppt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-955 flex flex-col gap-4 text-zinc-900 dark:text-zinc-50">
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="text-lg font-bold">Book a Clinic Visit</h3>
+              <button onClick={() => setIsBookingAppt(false)} className="text-zinc-400 hover:text-zinc-600 font-bold">✕</button>
+            </div>
+
+            <form onSubmit={handleBookAppt} className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Select Pet</label>
+                <select
+                  required value={bookingForm.petId}
+                  onChange={e => setBookingForm({ ...bookingForm, petId: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                >
+                  <option value="">Choose Pet...</option>
+                  {pets.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Select Veterinarian</label>
+                <select
+                  required value={bookingForm.vetId}
+                  onChange={e => {
+                    const vetId = e.target.value;
+                    const matchedVet = discoveryVets.find(v => v.id === vetId);
+                    const clinicId = matchedVet?.clinics?.[0]?.id || '';
+                    setBookingForm({ ...bookingForm, vetId, clinicId });
+                  }}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                >
+                  <option value="">Choose Doctor...</option>
+                  {discoveryVets.map(v => (
+                    <option key={v.id} value={v.id}>Dr. {v.user.firstName} {v.user.lastName} ({v.specialization || 'General Vet'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Schedule Date & Time</label>
+                <input
+                  type="datetime-local" required
+                  value={bookingForm.dateTime} onChange={e => setBookingForm({ ...bookingForm, dateTime: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Reason for Visit</label>
+                <textarea
+                  required placeholder="Annual checkup, vaccines, or specific health concerns..."
+                  value={bookingForm.reason} onChange={e => setBookingForm({ ...bookingForm, reason: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Submit Booking
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

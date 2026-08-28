@@ -609,7 +609,7 @@ export default function Dashboard() {
                             {upcomingAppt.status}
                           </span>
                         </div>
-                        <p className="text-xs text-zinc-500 mt-1">Vet: Dr. {upcomingAppt.vet.user.firstName} {upcomingAppt.vet.user.lastName}</p>
+                        <p className="text-xs text-zinc-500 mt-1">Vet: Dr. {upcomingAppt.vet?.user?.firstName} {upcomingAppt.vet?.user?.lastName}</p>
                         <p className="text-xs text-zinc-400">Clinic: {upcomingAppt.clinic.name}</p>
                         <p className="text-xs text-blue-600 font-semibold mt-2.5 flex items-center gap-1">
                           <span>📅</span> {new Date(upcomingAppt.dateTime).toLocaleDateString()} • <span>🕒</span> {new Date(upcomingAppt.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -793,7 +793,7 @@ export default function Dashboard() {
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <span className="text-xs text-zinc-400">{new Date(appt.dateTime).toLocaleString()}</span>
-                      <h4 className="font-bold text-sm mt-1">Pet: {appt.pet.name}</h4>
+                      <h4 className="font-bold text-sm mt-1">Pet: {appt.pet?.name}</h4>
                     </div>
                     <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
                       appt.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' :
@@ -804,8 +804,8 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <div className="text-xs text-zinc-500">
-                    <p>🩺 <strong>Vet:</strong> Dr. {appt.vet.user.firstName} {appt.vet.user.lastName}</p>
-                    <p>🏥 <strong>Clinic:</strong> {appt.clinic.name}</p>
+                    <p>🩺 <strong>Vet:</strong> Dr. {appt.vet?.user?.firstName} {appt.vet?.user?.lastName}</p>
+                    <p>🏥 <strong>Clinic:</strong> {appt.clinic?.name}</p>
                     <p className="mt-1">📋 <strong>Reason:</strong> {appt.reason}</p>
                   </div>
                 </div>
@@ -1219,7 +1219,7 @@ export default function Dashboard() {
                 >
                   <option value="">Choose Doctor...</option>
                   {discoveryVets.map(v => (
-                    <option key={v.id} value={v.id}>Dr. {v.user.firstName} {v.user.lastName} ({v.specialization || 'General Vet'})</option>
+                    <option key={v.id} value={v.id}>Dr. {v.user?.firstName} {v.user?.lastName} ({v.specialization || 'General Vet'})</option>
                   ))}
                 </select>
               </div>

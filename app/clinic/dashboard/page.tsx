@@ -6,17 +6,21 @@ import { useRouter } from 'next/navigation';
 export default function ClinicDashboard() {
   const router = useRouter();
 
-  // Navigation tabs
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'appointments' | 'vets' | 'profile'>('dashboard');
-
   // Database states
   const [clinic, setClinic] = useState<any>(null);
   const [vets, setVets] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [filteredAppts, setFilteredAppts] = useState<any[]>([]);
-  
+  const [adminProfile, setAdminProfile] = useState<any>(null);
+
   // Filtering states
   const [apptFilter, setApptFilter] = useState<string>('ALL'); // ALL, TODAY, UPCOMING, COMPLETED, CANCELLED, REQUESTED, CONFIRMED
+
+  // Selected appointment details modal
+  const [selectedAppt, setSelectedAppt] = useState<any>(null);
+
+  // Navigation tab state
+  const [activeNav, setActiveNav] = useState<'dashboard' | 'appointments' | 'vets' | 'profile'>('dashboard');
 
   // Loading/Error states
   const [loading, setLoading] = useState(true);
@@ -33,6 +37,13 @@ export default function ClinicDashboard() {
     async function loadData() {
       try {
         setError('');
+        // Get admin profile first
+        const meRes = await fetch('/api/auth/me');
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          setAdminProfile(meData.user);
+        }
+
         const clinicRes = await fetch('/api/clinic/profile');
         if (!clinicRes.ok) {
           router.push('/');
@@ -107,20 +118,19 @@ export default function ClinicDashboard() {
         setIsEditingProfile(false);
         setSuccessMsg('Clinic profile updated successfully.');
       } else {
-        setError(data.error?.message || 'Failed to update profile.');
+        setError(data.error.message || 'Failed to update clinic profile.');
       }
     } catch (err) {
       setSubmitting(false);
-      setError('A connection error occurred.');
+      setError('Connection error updating profile.');
     }
   }
 
-  // Logout handler
   async function handleLogout() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
       router.push('/');
-    } catch (e) {
+    } catch (err) {
       router.push('/');
     }
   }
@@ -128,328 +138,453 @@ export default function ClinicDashboard() {
   if (loading && !clinic) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <p className="text-sm font-semibold text-zinc-500">Loading clinic dashboard...</p>
+        <p className="text-zinc-500 font-medium">Loading Clinic Portal...</p>
       </div>
     );
   }
 
-  const todayAppts = appointments.filter(appt => {
-    const apptDate = new Date(appt.dateTime);
-    const today = new Date();
-    return apptDate.getDate() === today.getDate() &&
-      apptDate.getMonth() === today.getMonth() &&
-      apptDate.getFullYear() === today.getFullYear();
-  });
-
-  const upcomingAppts = appointments.filter(appt => {
-    return new Date(appt.dateTime) > new Date() && ['REQUESTED', 'CONFIRMED'].includes(appt.status);
-  });
+  // Helper calculations
+  const today = new Date().toDateString();
+  const todayAppts = appointments.filter(a => new Date(a.dateTime).toDateString() === today && a.status !== 'CANCELLED');
+  const upcomingApptsCount = appointments.filter(a => new Date(a.dateTime) > new Date() && a.status !== 'CANCELLED').length;
 
   return (
-    <div className="flex min-h-screen bg-zinc-50 font-sans text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
-      {/* Sidebar Navigation */}
-      <aside className="w-64 border-r border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900 flex flex-col justify-between">
-        <div>
-          <div className="mb-8">
-            <h1 className="text-xl font-bold text-blue-600">PETIVA Clinic</h1>
-            <p className="text-xs text-zinc-400 mt-1">Clinic Portal Admin</p>
+    <div className="flex min-h-screen bg-[#f8fafc] font-sans text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
+      
+      {/* 1. SIDEBAR NAVIGATION */}
+      <aside className="w-60 border-r border-zinc-150 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 flex flex-col justify-between shrink-0">
+        <div className="flex flex-col gap-6">
+          {/* Logo Header */}
+          <div className="flex flex-col gap-0.5 px-1 leading-tight">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🐾</span>
+              <span className="text-base font-black tracking-tight text-zinc-900 dark:text-white">PETIVA</span>
+            </div>
+            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest pl-8">Clinic Admin</span>
           </div>
 
-          <nav className="flex flex-col gap-2">
+          {/* Links list */}
+          <nav className="flex flex-col gap-1.5">
             <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full text-left px-3 py-2 rounded text-sm font-medium transition ${
-                activeTab === 'dashboard' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              onClick={() => { setActiveNav('dashboard'); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeNav === 'dashboard'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
               }`}
             >
-              📊 Dashboard
+              <span>🏠</span> Dashboard
             </button>
             <button
-              onClick={() => setActiveTab('appointments')}
-              className={`w-full text-left px-3 py-2 rounded text-sm font-medium transition ${
-                activeTab === 'appointments' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              onClick={() => { setActiveNav('appointments'); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeNav === 'appointments'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
               }`}
             >
-              📅 Appointments
+              <span>📅</span> Appointments
             </button>
             <button
-              onClick={() => setActiveTab('vets')}
-              className={`w-full text-left px-3 py-2 rounded text-sm font-medium transition ${
-                activeTab === 'vets' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              onClick={() => { setActiveNav('vets'); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeNav === 'vets'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
               }`}
             >
-              🩺 Veterinarians
+              <span>👥</span> Veterinarians
             </button>
             <button
-              onClick={() => setActiveTab('profile')}
-              className={`w-full text-left px-3 py-2 rounded text-sm font-medium transition ${
-                activeTab === 'profile' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              onClick={() => { setActiveNav('profile'); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeNav === 'profile'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
               }`}
             >
-              🏥 Clinic Profile
+              <span>🏥</span> Clinic Profile
             </button>
           </nav>
         </div>
 
-        <button
-          onClick={handleLogout}
-          className="w-full text-center border border-zinc-200 px-3 py-2 rounded text-sm font-medium text-red-600 hover:bg-red-50 dark:border-zinc-800 dark:hover:bg-red-950"
-        >
-          🚪 Log Out
-        </button>
+        {/* User profile & Logout */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between border-t border-zinc-100 pt-4 dark:border-zinc-800">
+            <div className="flex items-center gap-2.5">
+              <div className="h-9 w-9 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-sm font-bold">
+                {adminProfile?.firstName?.[0] || 'C'}
+              </div>
+              <div className="text-left leading-tight">
+                <p className="text-xs font-bold text-zinc-900 dark:text-white">{adminProfile?.firstName} {adminProfile?.lastName}</p>
+                <p className="text-[10px] text-zinc-400 font-medium">Clinic Manager</p>
+              </div>
+            </div>
+            <button onClick={() => { setActiveNav('profile'); }} className="text-zinc-400 hover:text-zinc-600">⚙</button>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="w-full border border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-850 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition text-zinc-700 dark:text-zinc-300"
+          >
+            🚪 Logout
+          </button>
+        </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 p-8 overflow-y-auto">
-        <header className="mb-6 flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{clinic?.name}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
-                clinic?.isVerified ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400'
-              }`}>
-                {clinic?.isVerified ? '✓ Verified' : '⚠ Verification Pending'}
-              </span>
-            </div>
-          </div>
-        </header>
-
+      {/* 2. MAIN WORKSPACE */}
+      <main className="flex-1 p-8 overflow-y-auto max-w-6xl">
         {error && (
-          <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-xs text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
             {error}
           </div>
         )}
 
         {successMsg && (
-          <div className="mb-4 rounded border border-green-200 bg-green-50 p-3 text-xs text-green-600 dark:border-green-800 dark:bg-green-950 dark:text-green-400">
+          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4 text-xs text-green-600 dark:border-green-800 dark:bg-green-950 dark:text-green-400">
             {successMsg}
           </div>
         )}
 
-        {/* 1. DASHBOARD VIEW */}
-        {activeTab === 'dashboard' && (
-          <div className="flex flex-col gap-6">
-            {/* Quick Metrics */}
-            <div className="grid grid-cols-3 gap-6">
-              <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs text-zinc-500 font-medium">Associated Veterinarians</p>
-                <p className="text-3xl font-bold mt-2">{vets.length}</p>
+        {/* 2.1 DASHBOARD VIEW */}
+        {activeNav === 'dashboard' && (
+          <div className="flex flex-col gap-8">
+            {/* Welcome banner */}
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-black text-zinc-950 dark:text-white leading-tight">Good morning, {adminProfile?.firstName || 'Manager'}! 👋</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">Manage your clinic operations and veterinarian associations.</p>
               </div>
-              <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs text-zinc-500 font-medium">Today's Appointments</p>
-                <p className="text-3xl font-bold mt-2">{todayAppts.length}</p>
-              </div>
-              <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs text-zinc-500 font-medium">Upcoming Schedules</p>
-                <p className="text-3xl font-bold mt-2">{upcomingAppts.length}</p>
-              </div>
-            </div>
-
-            {/* Today's Schedule Overview */}
-            <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <h3 className="text-lg font-bold mb-4">Today's Appointments Overview</h3>
-              {todayAppts.length === 0 ? (
-                <p className="text-sm text-zinc-500 italic">No appointments scheduled for today.</p>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {todayAppts.map(appt => (
-                    <div key={appt.id} className="flex justify-between items-center border-b border-zinc-100 pb-3 last:border-b-0 last:pb-0 dark:border-zinc-800">
-                      <div>
-                        <p className="text-sm font-bold">Pet: {appt.pet.name} ({appt.pet.species})</p>
-                        <p className="text-xs text-zinc-500">Vet: Dr. {appt.vet.user.firstName} {appt.vet.user.lastName} • Owner: {appt.owner.firstName} {appt.owner.lastName}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">{new Date(appt.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                          appt.status === 'CONFIRMED' ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400' : 'bg-yellow-50 text-yellow-600 dark:bg-yellow-950 dark:text-yellow-400'
-                        }`}>
-                          {appt.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+              <div className="flex items-center gap-4">
+                <div className="relative cursor-pointer">
+                  <span className="text-lg">🔔</span>
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-[8px] font-bold w-3 h-3 flex items-center justify-center">3</span>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 2. APPOINTMENTS TAB */}
-        {activeTab === 'appointments' && (
-          <div className="flex flex-col gap-6">
-            {/* Filter buttons */}
-            <div className="flex gap-2 border-b border-zinc-200 pb-4 dark:border-zinc-800">
-              {['ALL', 'TODAY', 'UPCOMING', 'REQUESTED', 'CONFIRMED', 'COMPLETED', 'CANCELLED'].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => handleFilterChange(f)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded transition ${
-                    apptFilter === f ? 'bg-blue-600 text-white' : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
+                <div className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-xs font-bold">
+                  {adminProfile?.firstName?.[0]}
+                </div>
+              </div>
             </div>
 
-            {/* List of filtered appointments */}
-            {filteredAppts.length === 0 ? (
-              <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-sm text-zinc-500 italic">No appointments matched the selected filter.</p>
+            {/* Stats row */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 text-lg dark:bg-blue-950/30">📅</div>
+                <div>
+                  <p className="text-2xl font-black">{todayAppts.length.toString().padStart(2, '0')}</p>
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Today's Appointments</p>
+                </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredAppts.map(appt => (
-                  <div key={appt.id} className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <span className="text-xs text-zinc-400">{new Date(appt.dateTime).toLocaleString()}</span>
-                        <h4 className="font-bold text-sm mt-1">Pet: {appt.pet.name} ({appt.pet.species})</h4>
-                      </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                        appt.status === 'CONFIRMED' ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' :
-                        appt.status === 'CANCELLED' ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400' :
-                        'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400'
-                      }`}>
-                        {appt.status}
-                      </span>
-                    </div>
-                    <div className="text-xs text-zinc-600 dark:text-zinc-400 flex flex-col gap-1">
-                      <p>👤 <strong>Owner:</strong> {appt.owner.firstName} {appt.owner.lastName} ({appt.owner.email})</p>
-                      <p>🩺 <strong>Veterinarian:</strong> Dr. {appt.vet.user.firstName} {appt.vet.user.lastName}</p>
-                      <p>📋 <strong>Reason:</strong> {appt.reason}</p>
-                    </div>
+              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 text-lg dark:bg-green-950/30">🕒</div>
+                <div>
+                  <p className="text-2xl font-black">{upcomingApptsCount.toString().padStart(2, '0')}</p>
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Upcoming Appointments</p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-lg dark:bg-purple-950/30">🩺</div>
+                <div>
+                  <p className="text-2xl font-black">{vets.length.toString().padStart(2, '0')}</p>
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Veterinarians</p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 text-lg dark:bg-orange-950/30">🏥</div>
+                <div>
+                  <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate max-w-[130px]">{clinic?.name}</p>
+                  <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Clinic Location</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Split layout: clinic appointments table & vets listing */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Today's Appointments table (Left 2/3) */}
+              <div className="lg:col-span-2 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-base font-bold text-zinc-900 dark:text-white">Today's Scheduled Visits</h3>
+                  <button onClick={() => { setActiveNav('appointments'); }} className="text-xs text-blue-600 font-semibold hover:underline">View all schedule →</button>
+                </div>
+
+                {todayAppts.length === 0 ? (
+                  <p className="text-xs text-zinc-400 italic py-8 text-center">No appointments scheduled for today.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-zinc-100 text-zinc-400 dark:border-zinc-800 font-semibold">
+                          <th className="pb-3">Time</th>
+                          <th className="pb-3">Pet</th>
+                          <th className="pb-3">Veterinarian</th>
+                          <th className="pb-3">Reason</th>
+                          <th className="pb-3">Status</th>
+                          <th className="pb-3 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-50 dark:divide-zinc-850">
+                        {todayAppts.map(appt => (
+                          <tr key={appt.id} className="text-zinc-700 dark:text-zinc-300">
+                            <td className="py-3 font-semibold text-zinc-900 dark:text-white">
+                              {new Date(appt.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="py-3 font-bold text-blue-600 flex items-center gap-1.5">
+                              <span>🐶</span> {appt.pet?.name}
+                            </td>
+                            <td className="py-3 font-medium">Dr. {appt.vet?.user?.firstName} {appt.vet?.user?.lastName}</td>
+                            <td className="py-3 text-zinc-500">{appt.reason}</td>
+                            <td className="py-3">
+                              <span className={`text-[10px] px-2.5 py-0.5 rounded font-bold ${
+                                appt.status === 'CONFIRMED' ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'
+                              }`}>
+                                {appt.status}
+                              </span>
+                            </td>
+                            <td className="py-3 text-right">
+                              <button
+                                onClick={() => setSelectedAppt(appt)}
+                                className="rounded bg-blue-600 hover:bg-blue-700 px-3 py-1 text-white text-[10px] font-bold"
+                              >
+                                Details
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 3. VETERINARIANS TAB */}
-        {activeTab === 'vets' && (
-          <div className="flex flex-col gap-6">
-            <h3 className="text-lg font-bold">Associated Veterinarians</h3>
-            {vets.length === 0 ? (
-              <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-sm text-zinc-500 italic">No veterinarians are currently associated with this clinic.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {vets.map(v => (
-                  <div key={v.id} className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-bold text-base">Dr. {v.firstName} {v.lastName}</h4>
-                        <p className="text-xs text-zinc-400 mt-0.5">{v.email}</p>
-                      </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                        v.status === 'ACTIVE' ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400'
-                      }`}>
-                        {v.status}
-                      </span>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-zinc-100 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400 flex flex-col gap-1">
-                      <p>🎓 <strong>Specialization:</strong> {v.specialization || 'General Vet Practitioner'}</p>
-                      <p>🪪 <strong>License Number:</strong> {v.licenseNumber}</p>
-                      <p>🛡️ <strong>Verification:</strong> {v.isVerified ? '✓ Verified Practitioner' : '⚠ Verification Pending'}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 4. PROFILE TAB */}
-        {activeTab === 'profile' && (
-          <div className="flex flex-col gap-6 max-w-xl">
-            <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex justify-between items-start mb-6">
-                <h3 className="text-lg font-bold">Clinic Profile Information</h3>
-                {!isEditingProfile && (
-                  <button
-                    onClick={() => setIsEditingProfile(true)}
-                    className="text-xs font-semibold px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    ✏️ Edit Profile
-                  </button>
                 )}
               </div>
 
-              {isEditingProfile ? (
-                <form onSubmit={handleUpdateProfile} className="flex flex-col gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-zinc-500 block mb-1">Clinic Name</label>
-                    <input
-                      type="text" required
-                      value={profileForm.name} onChange={e => setProfileForm({ ...profileForm, name: e.target.value })}
-                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                    />
+              {/* Clinic Vets list (Right 1/3) */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-white">Associated Vets</h3>
+                    <button onClick={() => { setActiveNav('vets'); }} className="text-xs text-blue-600 font-semibold hover:underline">View all vets →</button>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-semibold text-zinc-500 block mb-1">Address / Location</label>
-                    <input
-                      type="text" required
-                      value={profileForm.address} onChange={e => setProfileForm({ ...profileForm, address: e.target.value })}
-                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-zinc-500 block mb-1">Contact Phone</label>
-                    <input
-                      type="text"
-                      value={profileForm.phone} onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
-                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                    />
-                  </div>
-
-                  <div className="flex gap-2 justify-end mt-4">
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingProfile(false)}
-                      className="text-xs font-semibold px-3 py-1.5 rounded border border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit" disabled={submitting}
-                      className="text-xs font-semibold px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {submitting ? 'Saving...' : 'Save Changes'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div className="flex flex-col gap-4 text-sm">
-                  <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
-                    <p className="text-xs text-zinc-400">Clinic Name</p>
-                    <p className="font-semibold mt-0.5">{clinic?.name}</p>
-                  </div>
-
-                  <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
-                    <p className="text-xs text-zinc-400">Address Location</p>
-                    <p className="font-semibold mt-0.5">{clinic?.address}</p>
-                  </div>
-
-                  <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
-                    <p className="text-xs text-zinc-400">Phone</p>
-                    <p className="font-semibold mt-0.5">{clinic?.phone || 'Not Specified'}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-zinc-400">Verification Status</p>
-                    <p className="font-semibold mt-0.5 text-green-600 dark:text-green-400">{clinic?.isVerified ? 'Verified Hospital Portal' : 'Unverified'}</p>
-                  </div>
+                  {vets.length === 0 ? (
+                    <p className="text-xs text-zinc-400 italic py-6">No veterinarians associated with this clinic.</p>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {vets.slice(0, 5).map(vet => (
+                        <div
+                          key={vet.id}
+                          className="flex items-center justify-between p-2 rounded-xl border border-zinc-100 bg-[#fbfcfd]/40 dark:border-zinc-800 text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>🩺</span>
+                            <div>
+                              <h4 className="font-bold text-zinc-900 dark:text-white">Dr. {vet.firstName} {vet.lastName}</h4>
+                              <p className="text-[9px] text-zinc-400">{vet.specialization || 'General practice'}</p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] text-green-600 font-bold">● Active</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                <button
+                  onClick={() => { setActiveNav('vets'); }}
+                  className="w-full mt-4 rounded-xl border border-zinc-150 py-2 text-center text-xs font-bold hover:bg-zinc-50"
+                >
+                  👥 View all veterinarians
+                </button>
+              </div>
+
             </div>
           </div>
         )}
+
+        {/* 2.2 APPOINTMENTS VIEW */}
+        {activeNav === 'appointments' && (
+          <div className="flex flex-col gap-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold">Clinic Appointments</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400">Filter:</span>
+                <select
+                  value={apptFilter}
+                  onChange={e => handleFilterChange(e.target.value)}
+                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs dark:bg-zinc-800"
+                >
+                  <option value="ALL">All Appointments</option>
+                  <option value="TODAY">Today's Visits</option>
+                  <option value="UPCOMING">Upcoming Schedule</option>
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredAppts.map(appt => (
+                <div key={appt.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 flex justify-between items-start">
+                  <div>
+                    <span className="text-xs text-zinc-400">{new Date(appt.dateTime).toLocaleString()}</span>
+                    <h4 className="font-bold text-sm mt-1">Pet Patient: {appt.pet?.name}</h4>
+                    <p className="text-xs text-zinc-500">Owner: {appt.pet?.owner?.firstName} {appt.pet?.owner?.lastName}</p>
+                    <p className="text-xs text-zinc-500">Vet: Dr. {appt.vet?.user?.firstName} {appt.vet?.user?.lastName}</p>
+                    <p className="text-xs text-zinc-400 mt-2 italic">Reason: {appt.reason}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                      appt.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' :
+                      appt.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {appt.status}
+                    </span>
+                    <button
+                      onClick={() => setSelectedAppt(appt)}
+                      className="text-xs text-blue-600 font-semibold hover:underline"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 2.3 ASSOCIATED VETS INDEX */}
+        {activeNav === 'vets' && (
+          <div className="flex flex-col gap-6">
+            <h3 className="text-xl font-bold">Clinic Veterinarians Index</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {vets.map(v => (
+                <div key={v.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 flex justify-between items-center">
+                  <div>
+                    <h4 className="font-bold text-sm">Dr. {v.firstName} {v.lastName}</h4>
+                    <p className="text-xs text-zinc-400 mt-0.5">{v.specialization || 'General Vet Practice'}</p>
+                    <p className="text-xs text-zinc-500 mt-1">Contact: {v.phone || v.email}</p>
+                  </div>
+                  <span className="text-xs font-bold text-green-600">● Active Association</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 2.4 CLINIC PROFILE VIEW & EDIT */}
+        {activeNav === 'profile' && (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm max-w-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">Clinic Profile</h3>
+              <button
+                onClick={() => {
+                  setIsEditingProfile(!isEditingProfile);
+                  setError('');
+                }}
+                className="text-xs font-semibold text-blue-600 hover:underline"
+              >
+                {isEditingProfile ? 'Cancel' : 'Edit Profile'}
+              </button>
+            </div>
+
+            {isEditingProfile ? (
+              <form onSubmit={handleUpdateProfile} className="flex flex-col gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Clinic Name</label>
+                  <input
+                    type="text" required
+                    value={profileForm.name} onChange={e => setProfileForm({ ...profileForm, name: e.target.value })}
+                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Address Location</label>
+                  <input
+                    type="text" required
+                    value={profileForm.address} onChange={e => setProfileForm({ ...profileForm, address: e.target.value })}
+                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Clinic Contact Phone</label>
+                  <input
+                    type="text"
+                    value={profileForm.phone} onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
+                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                  />
+                </div>
+
+                <button
+                  type="submit" disabled={submitting}
+                  className="rounded-full bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition w-full disabled:opacity-50"
+                >
+                  {submitting ? 'Saving Changes...' : 'Save Clinic Profile'}
+                </button>
+              </form>
+            ) : (
+              <div className="flex flex-col gap-4 text-sm">
+                <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                  <p className="text-xs text-zinc-400">Clinic Name</p>
+                  <p className="font-semibold mt-0.5">{clinic?.name}</p>
+                </div>
+                <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                  <p className="text-xs text-zinc-400">Clinic Address</p>
+                  <p className="font-semibold mt-0.5">{clinic?.address}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400">Clinic Contact Phone</p>
+                  <p className="font-semibold mt-0.5">{clinic?.phone || 'Not Specified'}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </main>
+
+      {/* 3. APPOINTMENT DETAILS DIALOG OVERLAY */}
+      {selectedAppt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 flex flex-col gap-4 text-zinc-900 dark:text-zinc-50">
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="text-lg font-bold">Appointment Details</h3>
+              <button onClick={() => setSelectedAppt(null)} className="text-zinc-400 hover:text-zinc-600 font-bold">✕</button>
+            </div>
+
+            <div className="flex flex-col gap-3 text-xs leading-relaxed">
+              <div className="border-b border-zinc-100 pb-2 dark:border-zinc-800">
+                <span className="text-zinc-400 block">Date & Time</span>
+                <span className="font-bold text-sm text-blue-600">{new Date(selectedAppt.dateTime).toLocaleString()}</span>
+              </div>
+              <div className="border-b border-zinc-100 pb-2 dark:border-zinc-800">
+                <span className="text-zinc-400 block">Pet Patient</span>
+                <span className="font-bold text-sm">🐶 {selectedAppt.pet?.name} ({selectedAppt.pet?.breed || selectedAppt.pet?.species})</span>
+              </div>
+              <div className="border-b border-zinc-100 pb-2 dark:border-zinc-800">
+                <span className="text-zinc-400 block">Pet Owner</span>
+                <span className="font-bold text-sm">{selectedAppt.pet?.owner?.firstName} {selectedAppt.pet?.owner?.lastName} ({selectedAppt.pet?.owner?.email})</span>
+              </div>
+              <div className="border-b border-zinc-100 pb-2 dark:border-zinc-800">
+                <span className="text-zinc-400 block">Assigned Veterinarian</span>
+                <span className="font-bold text-sm">Dr. {selectedAppt.vet?.user?.firstName} {selectedAppt.vet?.user?.lastName}</span>
+              </div>
+              <div>
+                <span className="text-zinc-400 block">Reason for Visit</span>
+                <span className="font-medium">{selectedAppt.reason}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedAppt(null)}
+              className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700"
+            >
+              Close Details
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

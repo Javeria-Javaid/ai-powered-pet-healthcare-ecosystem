@@ -415,11 +415,11 @@ export default function VetDashboard() {
                               {new Date(appt.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </td>
                             <td className="py-3 font-bold text-blue-600 flex items-center gap-2">
-                              <span>🐶</span> {appt.pet.name}
+                              <span>🐶</span> {appt.pet?.name}
                             </td>
-                            <td className="py-3 font-medium">{appt.pet.owner.firstName} {appt.pet.owner.lastName}</td>
+                            <td className="py-3 font-medium">{appt.pet?.owner?.firstName} {appt.pet?.owner?.lastName}</td>
                             <td className="py-3 text-zinc-500">{appt.reason}</td>
-                            <td className="py-3 font-medium text-zinc-600">{appt.clinic.name}</td>
+                            <td className="py-3 font-medium text-zinc-600">{appt.clinic?.name}</td>
                             <td className="py-3">
                               <span className={`text-[10px] px-2.5 py-0.5 rounded font-bold ${
                                 appt.status === 'CONFIRMED' ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'
@@ -541,8 +541,8 @@ export default function VetDashboard() {
                 <div key={appt.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 flex justify-between items-center">
                   <div>
                     <span className="text-xs text-zinc-400">{new Date(appt.dateTime).toLocaleString()}</span>
-                    <h4 className="font-bold text-sm mt-1">Pet Patient: {appt.pet.name}</h4>
-                    <p className="text-xs text-zinc-500 mt-0.5">Owner: {appt.pet.owner.firstName} {appt.pet.owner.lastName}</p>
+                    <h4 className="font-bold text-sm mt-1">Pet Patient: {appt.pet?.name}</h4>
+                    <p className="text-xs text-zinc-500 mt-0.5">Owner: {appt.pet?.owner?.firstName} {appt.pet?.owner?.lastName}</p>
                     <p className="text-xs text-zinc-400 mt-1">Reason: {appt.reason}</p>
                   </div>
                   <div className="flex gap-2">

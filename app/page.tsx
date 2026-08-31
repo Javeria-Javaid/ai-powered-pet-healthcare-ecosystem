@@ -11,6 +11,7 @@ import HowItWorks from './components/HowItWorks';
 import CTASection from './components/CTASection';
 import Footer from './components/Footer';
 import AuthModal from './components/AuthModal';
+import ChatWidget from './components/ChatWidget';
 
 export default function Home() {
   const router = useRouter();
@@ -213,6 +214,9 @@ export default function Home() {
         handleSubmit={handleSubmit}
         handleGoogleCallback={handleGoogleCallback}
       />
+
+      {/* Public Landing Assistant Chat Widget */}
+      <ChatWidget />
     </div>
   );
 }

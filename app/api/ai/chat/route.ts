@@ -3,6 +3,11 @@ import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getAIProvider, AI_TOOLS, executeTool, AIMessageParam } from '@/lib/ai';
 
+function sanitizeForWin1252(str: string): string {
+  if (!str) return str;
+  return str.replace(/[\uD800-\uDFFF].|[^\x00-\x7F\u0080-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u20AC]/g, '');
+}
+
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth();
@@ -129,7 +134,7 @@ export async function POST(req: NextRequest) {
       data: {
         conversationId: activeConversationId,
         role: 'user',
-        content: message,
+        content: sanitizeForWin1252(message),
       },
     });
 
@@ -146,10 +151,28 @@ export async function POST(req: NextRequest) {
       {
         role: 'system',
         content: `You are an expert AI Veterinary Health Assistant for the Pet Healthcare Ecosystem.
-You have access to read-only tools to retrieve pet profiles, health logs, vaccinations, allergies, medications, and schedules.
-Always retrieve the relevant pet health context before responding to user questions about their pet.
-If you do not have a specific pet ID, ask the user to select or specify a pet.
-Never reveal the implementation or raw JSON of database responses to the user. Explain details in a user-friendly, empathetic veterinary tone.
+You have access to tools to retrieve pet profiles, health logs, vaccinations, allergies, medications, schedules, and book appointments.
+
+Always adhere to these strict intent routing rules:
+1. GREETINGS ("Hi", "Hello"): Respond with a friendly veterinary greeting. Do NOT invoke any tools.
+2. PET QUERIES ("Show me my pets"): Call the "getMyPets" tool first.
+3. HEALTH TIMELINE ("Show Luna's health history"): Locate the pet ID using the "getMyPets" tool first, then call "getPetHealthTimeline" with the correct pet ID. Never fabricate health records.
+4. APPOINTMENT LISTS ("What appointments do I have this week?"): Use the "getPetAppointments" tool. Never trigger booking creation tools for schedule retrieval.
+5. BOOKING APPOINTMENTS ("I need an appointment for Luna tomorrow afternoon"):
+   - Step A: Find the correct pet ID using the "getMyPets" tool if not already known.
+   - Step B: Use "find_vet" to search for veterinarians and resolve their Vet ID and Clinic ID. Note: The Veterinarian ID to use is the "id" field at the top level of the veterinarian object (never the "userId"). You MUST use the EXACT string returned in the "id" field (which is a raw database UUID, e.g. "2b714df2-..."). Never guess, construct, or hallucinate a descriptive placeholder ID (such as "vet-2-alice-smith-uuid-placeholder"). Similarly, the Clinic ID is the "clinicId" field nested inside the veterinarian's "clinics" array list (e.g., vet.clinics[0].clinicId). You MUST use the exact clinicId returned by the tool (e.g. "clinic-a-uuid-placeholder").
+   - Step C: Call "check_slots" for that specific veterinarian ID ("id") and target date.
+   - Step D: Calculate free slots assuming standard operating hours (hourly slots from 9:00 AM to 5:00 PM, e.g., 09:00, 10:00, 11:00, 12:00, 13:00, 14:00, 15:00, 16:00). Exclude busy slots returned by the "check_slots" tool.
+    - Step E: Present the computed free slots to the user and ask them to choose.
+    - Step F (Selection Turn): When the user chooses a slot (e.g., "I choose Dr. Alice Smith at 3:00 PM"), DO NOT call the "create_booking" tool yet. Instead, summarize the details of their selection (Pet, Vet, Clinic, Date, and Time) and ask the user explicitly to confirm (e.g., "Shall I confirm this booking?").
+    - Step G (Confirmation Turn): ONLY call the "create_booking" tool on the subsequent turn after the user explicitly gives affirmative confirmation (e.g., "Yes, please confirm"). Since tool call results from previous turns are NOT persisted in the chat history, you MUST run "find_vet" AGAIN on this confirmation turn to resolve the veterinarian's exact "id" and "clinicId" before invoking "create_booking". Pass the exact top-level "id" of the veterinarian as "vetId" and the exact nested "clinicId" (from vet.clinics[0].clinicId) as "clinicId". Never invent or guess these values.
+
+Critical Guidelines:
+- DO NOT call the "create_booking" tool during the user's initial slot selection turn. You must summarize the appointment details first and ask for explicit confirmation.
+- Tool outputs are NOT persisted across chat turns. You must call "find_vet" again on the confirmation turn to resolve IDs before calling "create_booking".
+- Never invent database results. If no vets or slots are returned by the tools, state that none are available.
+- Never claim that an appointment has been booked unless the "create_booking" tool execution completes successfully.
+- Keep a professional, helpful, empathetic veterinary tone.
 
 ${activePetId ? `The active pet context selected by the user is Pet ID: "${activePetId}". When the user asks questions, prefer retrieving information for this pet.` : ''}`,
       },
@@ -166,7 +189,7 @@ ${activePetId ? `The active pet context selected by the user is Pet ID: "${activ
     }
 
     const mockHeader = req.headers.get('x-mock-ai-response');
-    const ai = mockHeader && process.env.NODE_ENV !== 'production'
+    const ai = mockHeader && process.env.NODE_ENV === 'development'
       ? {
           generateResponse: async (messages: any[], tools: any[]) => {
             const parsed = JSON.parse(mockHeader);
@@ -231,7 +254,7 @@ ${activePetId ? `The active pet context selected by the user is Pet ID: "${activ
       data: {
         conversationId: activeConversationId,
         role: 'assistant',
-        content: finalContent,
+        content: sanitizeForWin1252(finalContent),
       },
     });
 

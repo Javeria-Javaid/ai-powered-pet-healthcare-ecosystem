@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth();
 
-    let appointments = [];
+    let appointments: any[] = [];
 
     if (user.role === 'PET_OWNER') {
       appointments = await prisma.appointment.findMany({

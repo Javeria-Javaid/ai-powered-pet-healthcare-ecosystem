@@ -173,7 +173,7 @@ export default function AuthModal({
           {/* Real Google button */}
           <div id="google-signin-btn" className="flex justify-center w-full"></div>
           {/* Developer Mock Google sign-in button */}
-          {process.env.NODE_ENV !== 'production' && (
+          {process.env.NODE_ENV === 'development' && (
             <button
               type="button"
               onClick={() => handleGoogleCallback({ credential: `mock_google_token_owner-google-${Date.now()}@example.com_Jane_Google` })}

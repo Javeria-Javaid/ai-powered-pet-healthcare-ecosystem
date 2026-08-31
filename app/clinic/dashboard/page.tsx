@@ -256,10 +256,6 @@ export default function ClinicDashboard() {
                 <p className="text-xs text-zinc-400 mt-0.5">Manage your clinic operations and veterinarian associations.</p>
               </div>
               <div className="flex items-center gap-4">
-                <div className="relative cursor-pointer">
-                  <span className="text-lg">🔔</span>
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-[8px] font-bold w-3 h-3 flex items-center justify-center">3</span>
-                </div>
                 <div className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-xs font-bold">
                   {adminProfile?.firstName?.[0]}
                 </div>
@@ -381,7 +377,7 @@ export default function ClinicDashboard() {
                               <p className="text-[9px] text-zinc-400">{vet.specialization || 'General practice'}</p>
                             </div>
                           </div>
-                          <span className="text-[9px] text-green-600 font-bold">● Active</span>
+                          <span className="text-[9px] text-green-600 font-bold">● {vet.status}</span>
                         </div>
                       ))}
                     </div>
@@ -464,7 +460,7 @@ export default function ClinicDashboard() {
                     <p className="text-xs text-zinc-400 mt-0.5">{v.specialization || 'General Vet Practice'}</p>
                     <p className="text-xs text-zinc-500 mt-1">Contact: {v.phone || v.email}</p>
                   </div>
-                  <span className="text-xs font-bold text-green-600">● Active Association</span>
+                  <span className="text-xs font-bold text-green-600">● {v.status}</span>
                 </div>
               ))}
             </div>

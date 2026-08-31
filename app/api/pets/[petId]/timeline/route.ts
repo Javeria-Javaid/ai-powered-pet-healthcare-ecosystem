@@ -102,7 +102,7 @@ export async function GET(
     conditions.forEach((cond) => {
       events.push({
         type: 'CONDITION',
-        date: cond.onsetDate || cond.createdAt,
+        date: cond.onsetDate || new Date(),
         title: `Condition Diagnosed: ${cond.name}`,
         description: `Status: ${cond.status}`,
         meta: {},

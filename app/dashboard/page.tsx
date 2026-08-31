@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -456,13 +457,8 @@ export default function Dashboard() {
                 <h2 className="text-2xl font-black text-zinc-950 dark:text-white leading-tight">Good morning, {profile?.firstName}! 👋</h2>
                 <p className="text-xs text-zinc-400 mt-0.5">Your pets are healthier with PETIVA</p>
               </div>
-              {/* Notification icon & search headers */}
+              {/* Profile avatar header */}
               <div className="flex items-center gap-4">
-                <span className="cursor-pointer text-lg">🔍</span>
-                <div className="relative cursor-pointer">
-                  <span className="text-lg">🔔</span>
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-[8px] font-bold w-3 h-3 flex items-center justify-center">3</span>
-                </div>
                 <img
                   src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100"
                   alt="Jane Doe profile avatar circular header"
@@ -547,9 +543,6 @@ export default function Dashboard() {
                       <p className="text-[11px] text-zinc-400 mt-1">{selectedPet.breed || selectedPet.species} • {selectedPet.gender}</p>
                     </div>
                     <div className="flex items-center gap-2.5">
-                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 font-bold dark:bg-green-950 dark:text-green-400">
-                        ● Healthy
-                      </span>
                       <button
                         onClick={() => { setActiveTab('pets'); }}
                         className="rounded-full border border-zinc-200 px-3.5 py-1 text-xs font-semibold hover:bg-zinc-50 dark:border-zinc-800 transition"
@@ -563,19 +556,32 @@ export default function Dashboard() {
                   <div className="grid grid-cols-4 gap-4 mt-2">
                     <div className="rounded-xl bg-zinc-50/50 p-3.5 border border-zinc-100 dark:bg-zinc-800/30 dark:border-zinc-800">
                       <p className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">Vaccinations</p>
-                      <p className="text-[11px] font-bold mt-1 text-green-600 dark:text-green-400">Up to date</p>
+                      <p className="text-[11px] font-bold mt-1 text-green-600 dark:text-green-400">
+                        {timeline.filter(e => e.type === 'VACCINATION').length} Recorded
+                      </p>
                     </div>
                     <div className="rounded-xl bg-zinc-50/50 p-3.5 border border-zinc-100 dark:bg-zinc-800/30 dark:border-zinc-800">
                       <p className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">Medications</p>
-                      <p className="text-[11px] font-bold mt-1 text-orange-600 dark:text-orange-400">1 Active</p>
+                      <p className="text-[11px] font-bold mt-1 text-orange-600 dark:text-orange-400">
+                        {timeline.filter(e => e.type === 'MEDICATION').length} Active
+                      </p>
                     </div>
                     <div className="rounded-xl bg-zinc-50/50 p-3.5 border border-zinc-100 dark:bg-zinc-800/30 dark:border-zinc-800">
                       <p className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">Allergies</p>
-                      <p className="text-[11px] font-bold mt-1 text-purple-600 dark:text-purple-400">None recorded</p>
+                      <p className="text-[11px] font-bold mt-1 text-purple-600 dark:text-purple-400">
+                        {timeline.filter(e => e.type === 'ALLERGY').length === 0 
+                          ? 'None recorded' 
+                          : `${timeline.filter(e => e.type === 'ALLERGY').length} Recorded`}
+                      </p>
                     </div>
                     <div className="rounded-xl bg-zinc-50/50 p-3.5 border border-zinc-100 dark:bg-zinc-800/30 dark:border-zinc-800">
                       <p className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">Last Visit</p>
-                      <p className="text-[11px] font-bold mt-1 text-zinc-700 dark:text-zinc-300">10 Jun, 2025</p>
+                      <p className="text-[11px] font-bold mt-1 text-zinc-700 dark:text-zinc-300">
+                        {(() => {
+                          const pastAppts = timeline.filter(e => e.type === 'APPOINTMENT' && new Date(e.date) < new Date());
+                          return pastAppts.length > 0 ? new Date(pastAppts[0].date).toLocaleDateString() : 'None';
+                        })()}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -846,7 +852,24 @@ export default function Dashboard() {
                         : 'mr-auto bg-zinc-100 text-zinc-800 rounded-bl-none dark:bg-zinc-800 dark:text-zinc-200'
                     }`}
                   >
-                    {msg.content}
+                    {msg.role === 'user' ? (
+                      msg.content
+                    ) : (
+                      <ReactMarkdown
+                        components={{
+                          h1: ({node, ...props}) => <h1 className="text-base font-bold my-1 text-zinc-950 dark:text-zinc-50" {...props} />,
+                          h2: ({node, ...props}) => <h2 className="text-sm font-bold my-1 text-zinc-900 dark:text-zinc-100" {...props} />,
+                          h3: ({node, ...props}) => <h3 className="text-xs font-bold my-1 text-zinc-900 dark:text-zinc-150" {...props} />,
+                          p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                          ul: ({node, ...props}) => <ul className="list-disc pl-4 mb-2 flex flex-col gap-1" {...props} />,
+                          ol: ({node, ...props}) => <ol className="list-decimal pl-4 mb-2 flex flex-col gap-1" {...props} />,
+                          li: ({node, ...props}) => <li className="mb-0.5" {...props} />,
+                          strong: ({node, ...props}) => <strong className="font-semibold text-zinc-950 dark:text-white" {...props} />,
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    )}
                   </div>
                 ))
               )}

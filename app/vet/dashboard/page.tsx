@@ -338,10 +338,6 @@ export default function VetDashboard() {
                 <p className="text-xs text-zinc-400 mt-0.5">Here's your practice overview for today.</p>
               </div>
               <div className="flex items-center gap-4">
-                <div className="relative cursor-pointer">
-                  <span className="text-lg">🔔</span>
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-[8px] font-bold w-3 h-3 flex items-center justify-center">3</span>
-                </div>
                 <img
                   src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&q=80&w=100"
                   alt="Dr Jane Doe profile avatar circular header"
@@ -376,7 +372,9 @@ export default function VetDashboard() {
               <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 text-xl font-bold dark:bg-orange-950/30">📋</div>
                 <div>
-                  <p className="text-2xl font-black">05</p>
+                  <p className="text-2xl font-black">
+                    {appointments.filter(a => a.status === 'REQUESTED').length.toString().padStart(2, '0')}
+                  </p>
                   <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Pending Actions</p>
                 </div>
               </div>
@@ -488,7 +486,7 @@ export default function VetDashboard() {
             {/* Quick Actions Row */}
             <div>
               <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button
                   onClick={() => { setActiveNav('appointments'); }}
                   className="rounded-2xl border border-zinc-150 bg-white p-4.5 text-left hover:bg-zinc-50 shadow-sm transition flex items-center gap-3"
@@ -519,13 +517,6 @@ export default function VetDashboard() {
                     <p className="text-[10px] text-zinc-400 mt-0.5">View medical histories</p>
                   </div>
                 </button>
-                <div className="rounded-2xl border border-zinc-150 bg-white p-4.5 text-left shadow-sm flex items-center gap-3 opacity-60">
-                  <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 text-lg">🧪</div>
-                  <div>
-                    <h4 className="font-bold text-xs text-zinc-900">Lab Results</h4>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">Check lab status</p>
-                  </div>
-                </div>
               </div>
             </div>
 

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     let lastName = 'User';
 
     // Enable mock verification in development/testing environments
-    if (process.env.NODE_ENV !== 'production' && credential.startsWith('mock_google_token_')) {
+    if (process.env.NODE_ENV === 'development' && credential.startsWith('mock_google_token_')) {
       const parts = credential.split('_');
       // format: mock_google_token_email_firstName_lastName
       email = parts[3] || 'mock@example.com';

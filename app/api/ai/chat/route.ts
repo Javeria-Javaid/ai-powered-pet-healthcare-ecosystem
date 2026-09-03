@@ -3,10 +3,6 @@ import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getAIProvider, AI_TOOLS, executeTool, AIMessageParam } from '@/lib/ai';
 
-function sanitizeForWin1252(str: string): string {
-  if (!str) return str;
-  return str.replace(/[\uD800-\uDFFF].|[^\x00-\x7F\u0080-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u20AC]/g, '');
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -63,7 +59,7 @@ export async function GET(req: NextRequest) {
       );
     }
     return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: err.message } },
+      { success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Unable to process your request. Please try again.' } },
       { status: 500 }
     );
   }
@@ -134,7 +130,7 @@ export async function POST(req: NextRequest) {
       data: {
         conversationId: activeConversationId,
         role: 'user',
-        content: sanitizeForWin1252(message),
+        content: message.replace(/\u202F/g, ' ').replace(/\u2011/g, '-'),
       },
     });
 
@@ -147,34 +143,46 @@ export async function POST(req: NextRequest) {
     pastMessages.reverse();
 
     // Prepare system instructions and initial context
+    const now = new Date();
+    const currentDate = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', dateStyle: 'full', timeStyle: 'long' }).format(now).replace(/\u202F/g, ' ');
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowDate = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', dateStyle: 'full' }).format(tomorrow);
+    
     const messagesToSend: AIMessageParam[] = [
       {
         role: 'system',
-        content: `You are an expert AI Veterinary Health Assistant for the Pet Healthcare Ecosystem.
-You have access to tools to retrieve pet profiles, health logs, vaccinations, allergies, medications, schedules, and book appointments.
+        content: `You are PETIVA AI Vet Assistant. Current date: ${currentDate}. Tomorrow is: ${tomorrowDate}. All relative dates resolve to this.
+Available tools retrieve pets, health logs, schedules, and book appointments.
 
-Always adhere to these strict intent routing rules:
-1. GREETINGS ("Hi", "Hello"): Respond with a friendly veterinary greeting. Do NOT invoke any tools.
-2. PET QUERIES ("Show me my pets"): Call the "getMyPets" tool first.
-3. HEALTH TIMELINE ("Show Luna's health history"): Locate the pet ID using the "getMyPets" tool first, then call "getPetHealthTimeline" with the correct pet ID. Never fabricate health records.
-4. APPOINTMENT LISTS ("What appointments do I have this week?"): Use the "getPetAppointments" tool. Never trigger booking creation tools for schedule retrieval.
-5. BOOKING APPOINTMENTS ("I need an appointment for Luna tomorrow afternoon"):
-   - Step A: Find the correct pet ID using the "getMyPets" tool if not already known.
-   - Step B: Use "find_vet" to search for veterinarians and resolve their Vet ID and Clinic ID. Note: The Veterinarian ID to use is the "id" field at the top level of the veterinarian object (never the "userId"). You MUST use the EXACT string returned in the "id" field (which is a raw database UUID, e.g. "2b714df2-..."). Never guess, construct, or hallucinate a descriptive placeholder ID (such as "vet-2-alice-smith-uuid-placeholder"). Similarly, the Clinic ID is the "clinicId" field nested inside the veterinarian's "clinics" array list (e.g., vet.clinics[0].clinicId). You MUST use the exact clinicId returned by the tool (e.g. "clinic-a-uuid-placeholder").
-   - Step C: Call "check_slots" for that specific veterinarian ID ("id") and target date.
-   - Step D: Calculate free slots assuming standard operating hours (hourly slots from 9:00 AM to 5:00 PM, e.g., 09:00, 10:00, 11:00, 12:00, 13:00, 14:00, 15:00, 16:00). Exclude busy slots returned by the "check_slots" tool.
-    - Step E: Present the computed free slots to the user and ask them to choose.
-    - Step F (Selection Turn): When the user chooses a slot (e.g., "I choose Dr. Alice Smith at 3:00 PM"), DO NOT call the "create_booking" tool yet. Instead, summarize the details of their selection (Pet, Vet, Clinic, Date, and Time) and ask the user explicitly to confirm (e.g., "Shall I confirm this booking?").
-    - Step G (Confirmation Turn): ONLY call the "create_booking" tool on the subsequent turn after the user explicitly gives affirmative confirmation (e.g., "Yes, please confirm"). Since tool call results from previous turns are NOT persisted in the chat history, you MUST run "find_vet" AGAIN on this confirmation turn to resolve the veterinarian's exact "id" and "clinicId" before invoking "create_booking". Pass the exact top-level "id" of the veterinarian as "vetId" and the exact nested "clinicId" (from vet.clinics[0].clinicId) as "clinicId". Never invent or guess these values.
+ROUTING RULES:
+1. GREETINGS: Respond politely. No tools.
+2. PET QUERIES: Call "getMyPets".
+3. HEALTH TIMELINE: Call "getMyPets" -> "getPetHealthTimeline" (requires petId).
+4. APPOINTMENTS: Use "getPetAppointments".
 
-Critical Guidelines:
-- DO NOT call the "create_booking" tool during the user's initial slot selection turn. You must summarize the appointment details first and ask for explicit confirmation.
-- Tool outputs are NOT persisted across chat turns. You must call "find_vet" again on the confirmation turn to resolve IDs before calling "create_booking".
-- Never invent database results. If no vets or slots are returned by the tools, state that none are available.
-- Never claim that an appointment has been booked unless the "create_booking" tool execution completes successfully.
-- Keep a professional, helpful, empathetic veterinary tone.
+5. BOOKING APPOINTMENTS (e.g. "I need an appointment"):
+ - A: Find pet ID ("getMyPets").
+ - B: Use "find_vet" to resolve Vet ID ("id") and Clinic ID ("clinicId").
+ - C: Call "check_slots" for that vet and date.
+ - D: Calculate free slots based on 9 AM - 5 PM hourly (09:00, 10:00...16:00). Exclude busy slots.
+ - E: Ask user to choose a slot.
+ - F (Selection Turn): Summarize chosen Pet, Vet, Clinic, Date, Time. Ask for explicit confirmation. DO NOT call "create_booking" yet.
+ - G (Confirmation Turn): After user confirms, you MUST call "find_vet" again to re-resolve the exact Vet ID and Clinic ID (tool context is lost between turns). Then call "create_booking".
 
-${activePetId ? `The active pet context selected by the user is Pet ID: "${activePetId}". When the user asks questions, prefer retrieving information for this pet.` : ''}`,
+6. CANCELLING APPOINTMENTS:
+ - A: Find appointment ID ("getPetAppointments").
+ - B: Ask for explicit confirmation before cancelling. DO NOT call "cancel_appointment" yet.
+ - C (Confirmation Turn): After user confirms, call "cancel_appointment".
+
+CRITICAL:
+- Show absolute dates (e.g. "Sept 4, 2026") not just "tomorrow".
+- Do not call "create_booking" or "cancel_appointment" until explicit confirmation turn.
+- Tool history is NOT persisted across turns; re-fetch IDs before booking/cancelling if needed.
+- Never invent DB results.
+- No emojis.
+
+${activePetId ? `Active Pet ID: "${activePetId}". Prefer this pet's context.` : ''}`,
       },
       ...pastMessages.map(m => ({
         role: m.role as 'user' | 'assistant',
@@ -182,86 +190,155 @@ ${activePetId ? `The active pet context selected by the user is Pet ID: "${activ
       })),
     ];
 
-    // Test mode payload interception (restricted to non-production environments)
+    let selectedPetName = 'your pet';
+    if (activePetId) {
+      const pet = await prisma.pet.findUnique({ where: { id: activePetId } });
+      if (pet) selectedPetName = pet.name;
+    }
+
     const testMode = req.nextUrl.searchParams.get('test') === 'true' && process.env.NODE_ENV !== 'production';
-    if (testMode) {
-      return NextResponse.json({ success: true, messagesToSend });
-    }
-
     const mockHeader = req.headers.get('x-mock-ai-response');
-    const ai = mockHeader && process.env.NODE_ENV === 'development'
-      ? {
-          generateResponse: async (messages: any[], tools: any[]) => {
-            const parsed = JSON.parse(mockHeader);
-            const mockIndex = loopCount - 1;
-            const currentMock = Array.isArray(parsed) ? parsed[mockIndex] : parsed;
-            return currentMock;
-          }
-        }
-      : getAIProvider();
-    let loopCount = 0;
-    const maxLoops = 5;
-    let finalContent = '';
 
-    // Loop to support iterative multi-step tool calls
-    while (loopCount < maxLoops) {
-      loopCount++;
+    const stream = new ReadableStream({
+      async start(controller) {
+        let isClosed = false;
 
-      const res = await ai.generateResponse(messagesToSend, AI_TOOLS);
-
-      // Check if AI requested a tool execution
-      if (res.toolCalls && res.toolCalls.length > 0) {
-        // Append the assistant's tool-call request to track state
-        messagesToSend.push({
-          role: 'assistant',
-          content: res.content || '',
-          // Include tool call metadata for provider compatibility
-          ...(res.toolCalls ? { tool_calls: res.toolCalls } as any : {}),
-        });
-
-        // Execute all requested tools
-        for (const tc of res.toolCalls) {
+        const safeClose = () => {
+          if (isClosed) return;
+          isClosed = true;
           try {
-            const toolResult = await executeTool(tc.function.name, tc.function.arguments, user.id);
-            messagesToSend.push({
-              role: 'tool',
-              name: tc.function.name,
-              tool_call_id: tc.id,
-              content: toolResult,
-            });
-          } catch (e: any) {
-            messagesToSend.push({
-              role: 'tool',
-              name: tc.function.name,
-              tool_call_id: tc.id,
-              content: JSON.stringify({ success: false, error: e.message }),
-            });
+            controller.close();
+          } catch (e) {
+            // Ignore error if already closed
           }
+        };
+
+        const sendStatus = (msg: string) => {
+          if (isClosed) return;
+          try {
+            controller.enqueue(new TextEncoder().encode(JSON.stringify({ type: 'status', message: msg }) + '\n'));
+          } catch (e) {
+            isClosed = true; // Stream likely aborted by client
+          }
+        };
+
+        const sendResult = (data: any) => {
+          if (isClosed) return;
+          try {
+            controller.enqueue(new TextEncoder().encode(JSON.stringify({ type: 'result', ...data }) + '\n'));
+          } catch (e) {
+            isClosed = true;
+          }
+        };
+
+        try {
+          if (testMode) {
+            sendResult({ success: true, messagesToSend });
+            safeClose();
+            return;
+          }
+
+          const ai = mockHeader && process.env.NODE_ENV === 'development'
+            ? {
+                generateResponse: async (messages: any[], tools: any[]) => {
+                  const parsed = JSON.parse(mockHeader);
+                  const mockIndex = loopCount - 1;
+                  const currentMock = Array.isArray(parsed) ? parsed[mockIndex] : parsed;
+                  return currentMock;
+                }
+              }
+            : getAIProvider();
+          let loopCount = 0;
+          const maxLoops = 5;
+          let finalContent = '';
+
+          while (loopCount < maxLoops) {
+            loopCount++;
+            if (isClosed) break;
+
+            const res = await ai.generateResponse(messagesToSend, AI_TOOLS);
+            if (isClosed) break;
+
+            if (res.toolCalls && res.toolCalls.length > 0) {
+              messagesToSend.push({
+                role: 'assistant',
+                content: res.content || '',
+                ...(res.toolCalls ? { tool_calls: res.toolCalls } as any : {}),
+              });
+
+              for (const tc of res.toolCalls) {
+                if (isClosed) break;
+                
+                const toolName = tc.function.name.replace(/^default_api:/, '');
+                
+                let statusMsg = 'Analyzing health records...';
+                if (toolName === 'getPetHealthTimeline') statusMsg = `Reviewing ${selectedPetName}'s health information...`;
+                else if (toolName === 'getPetVaccinations') statusMsg = `Checking ${selectedPetName}'s vaccination records...`;
+                else if (toolName === 'find_vet') statusMsg = 'Finding available veterinarians...';
+                else if (toolName === 'check_slots') statusMsg = 'Checking available time slots...';
+                else if (toolName === 'create_booking') statusMsg = `Booking ${selectedPetName}'s appointment...`;
+                else if (toolName === 'cancel_appointment') statusMsg = `Cancelling ${selectedPetName}'s appointment...`;
+                else if (toolName === 'getPetAppointments') statusMsg = 'Checking appointment availability...';
+                
+                sendStatus(statusMsg);
+
+                try {
+                  const toolResult = await executeTool(toolName, typeof tc.function.arguments === 'string' ? tc.function.arguments : JSON.stringify(tc.function.arguments), user.id);
+                  messagesToSend.push({
+                    role: 'tool',
+                    name: tc.function.name,
+                    tool_call_id: tc.id,
+                    content: toolResult,
+                  });
+                } catch (e: any) {
+                  messagesToSend.push({
+                    role: 'tool',
+                    name: tc.function.name,
+                    tool_call_id: tc.id,
+                    content: JSON.stringify({ success: false, error: e.message }),
+                  });
+                }
+              }
+            } else {
+              finalContent = res.content;
+              break;
+            }
+          }
+
+          if (isClosed) return;
+
+          if (!finalContent && loopCount >= maxLoops) {
+            finalContent = "I apologize, but I encountered an issue retrieving the data. Please try again.";
+          }
+
+          await prisma.aIMessage.create({
+            data: {
+              conversationId: activeConversationId,
+              role: 'assistant',
+              content: finalContent.replace(/\u202F/g, ' ').replace(/\u2011/g, '-'),
+            },
+          });
+
+          sendResult({
+            success: true,
+            conversationId: activeConversationId,
+            message: finalContent,
+          });
+          safeClose();
+        } catch (err: any) {
+          console.error('AI Chat Stream Error:', err.message);
+          sendResult({ success: false, error: { message: err.message || 'Internal stream error.' } });
+          safeClose();
         }
-      } else {
-        // AI completed its processing
-        finalContent = res.content;
-        break;
       }
-    }
-
-    if (!finalContent && loopCount >= maxLoops) {
-      finalContent = "I apologize, but I encountered an issue retrieving the data. Please try again.";
-    }
-
-    // Save final assistant response in database
-    await prisma.aIMessage.create({
-      data: {
-        conversationId: activeConversationId,
-        role: 'assistant',
-        content: sanitizeForWin1252(finalContent),
-      },
     });
 
-    return NextResponse.json({
-      success: true,
-      conversationId: activeConversationId,
-      message: finalContent,
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      }
     });
 
   } catch (err: any) {
@@ -273,7 +350,7 @@ ${activePetId ? `The active pet context selected by the user is Pet ID: "${activ
       );
     }
     return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: err.message } },
+      { success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Unable to process your request. Please try again.' } },
       { status: 500 }
     );
   }

@@ -1,28 +1,28 @@
 import { AIMessageParam, ToolCall } from '../../ai';
 
-export interface GeminiResponse {
+export interface GroqResponse {
   role: 'assistant';
   content: string;
   toolCalls?: ToolCall[];
 }
 
-export class GeminiProvider {
+export class GroqProvider {
   private apiKey: string;
 
   constructor() {
-    this.apiKey = process.env.GEMINI_API_KEY || '';
+    this.apiKey = process.env.GROQ_API_KEY || '';
   }
 
   async generateResponse(
     messages: AIMessageParam[],
     tools?: any[]
-  ): Promise<GeminiResponse> {
+  ): Promise<GroqResponse> {
     if (!this.apiKey) {
-      throw new Error('GEMINI_API_KEY is not configured in the environment.');
+      throw new Error('GROQ_API_KEY is not configured in the environment.');
     }
 
     const payload: any = {
-      model: 'gemini-3.6-flash',
+      model: 'openai/gpt-oss-120b',
       messages: messages.map(m => ({
         role: m.role,
         content: m.content,
@@ -36,7 +36,7 @@ export class GeminiProvider {
       payload.tools = tools;
     }
 
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -47,13 +47,13 @@ export class GeminiProvider {
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`Gemini API error (status ${res.status}): ${errText}`);
+      throw new Error(`Groq API error (status ${res.status}): ${errText}`);
     }
 
     const data = await res.json();
     const choice = data.choices?.[0];
     if (!choice || !choice.message) {
-      throw new Error('Invalid response structure received from Gemini.');
+      throw new Error('Invalid response structure received from Groq.');
     }
 
     const msg = choice.message;

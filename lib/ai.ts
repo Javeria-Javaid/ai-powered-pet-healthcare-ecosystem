@@ -104,9 +104,24 @@ export class OpenRouterProvider implements AIProvider {
 
 import { GeminiProvider } from './ai/providers/gemini';
 import { QwenProvider } from './ai/providers/qwen';
+import { GroqProvider } from './ai/providers/groq';
 
-// Config flag to swap between Qwen and Gemini
-export const BOOKING_ASSISTANT_PROVIDER = process.env.BOOKING_ASSISTANT_PROVIDER || 'gemini';
+// Config flag to swap between Qwen, Groq, and Gemini
+export const BOOKING_ASSISTANT_PROVIDER = process.env.BOOKING_ASSISTANT_PROVIDER || 'groq';
+
+class FallbackProvider {
+  private primary = new GroqProvider();
+  private secondary = new GeminiProvider();
+
+  async generateResponse(messages: any[], tools?: any[]) {
+    try {
+      return await this.primary.generateResponse(messages, tools);
+    } catch (error) {
+      console.warn('[AI DIAGNOSTIC] Groq failed, falling back to Gemini:', error);
+      return await this.secondary.generateResponse(messages, tools);
+    }
+  }
+}
 
 // Get the active provider instance
 export function getAIProvider(): any {
@@ -114,7 +129,11 @@ export function getAIProvider(): any {
   if (BOOKING_ASSISTANT_PROVIDER === 'qwen') {
     return new QwenProvider();
   }
-  return new GeminiProvider();
+  if (BOOKING_ASSISTANT_PROVIDER === 'gemini') {
+    return new GeminiProvider();
+  }
+  // Default to FallbackProvider for groq to handle rate limits gracefully
+  return new FallbackProvider();
 }
 
 // Define the tool descriptions for the LLM
@@ -123,76 +142,18 @@ export const AI_TOOLS = [
     type: 'function',
     function: {
       name: 'getMyPets',
-      description: 'Retrieve a list of all pets belonging to the currently logged in owner.',
+      description: 'Get logged in user\'s pets.',
       parameters: { type: 'object', properties: {} },
     },
   },
   {
     type: 'function',
     function: {
-      name: 'getPetProfile',
-      description: 'Get details about a specific pet.',
-      parameters: {
-        type: 'object',
-        properties: {
-          petId: { type: 'string', description: 'The unique ID of the pet.' },
-        },
-        required: ['petId'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
       name: 'getPetHealthTimeline',
-      description: 'Get the health history timeline including diagnoses, vaccinations, etc., for a specific pet.',
+      description: 'Get full health history (diagnoses, vaccines, meds, allergies) for a pet.',
       parameters: {
         type: 'object',
-        properties: {
-          petId: { type: 'string', description: 'The unique ID of the pet.' },
-        },
-        required: ['petId'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'getPetVaccinations',
-      description: 'Retrieve all vaccination history logs for a specific pet.',
-      parameters: {
-        type: 'object',
-        properties: {
-          petId: { type: 'string', description: 'The unique ID of the pet.' },
-        },
-        required: ['petId'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'getPetMedications',
-      description: 'Retrieve current and historical medications prescribed to a specific pet.',
-      parameters: {
-        type: 'object',
-        properties: {
-          petId: { type: 'string', description: 'The unique ID of the pet.' },
-        },
-        required: ['petId'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'getPetAllergies',
-      description: 'Retrieve all identified allergies for a specific pet.',
-      parameters: {
-        type: 'object',
-        properties: {
-          petId: { type: 'string', description: 'The unique ID of the pet.' },
-        },
+        properties: { petId: { type: 'string' } },
         required: ['petId'],
       },
     },
@@ -201,12 +162,10 @@ export const AI_TOOLS = [
     type: 'function',
     function: {
       name: 'getPetAppointments',
-      description: 'Retrieve all upcoming and past appointment schedules for a specific pet.',
+      description: 'Get pet appointment schedules.',
       parameters: {
         type: 'object',
-        properties: {
-          petId: { type: 'string', description: 'The unique ID of the pet.' },
-        },
+        properties: { petId: { type: 'string' } },
         required: ['petId'],
       },
     },
@@ -215,11 +174,14 @@ export const AI_TOOLS = [
     type: 'function',
     function: {
       name: 'find_vet',
-      description: 'Search for available veterinarians in the system, optionally filtering by medical specialization.',
+      description: 'Search veterinarians by specialization (e.g. General, Cardiology).',
       parameters: {
         type: 'object',
         properties: {
-          specialization: { type: 'string', description: 'Optional medical specialization (e.g. Cardiology, Surgery).' },
+          specialization: {
+            type: ['string', 'null'],
+            description: 'Optional. Only include this if the user specifically requests a specialty (e.g. surgery, dermatology). Omit this parameter entirely if not specified \u2014 do not pass null.',
+          },
         },
       },
     },
@@ -228,12 +190,12 @@ export const AI_TOOLS = [
     type: 'function',
     function: {
       name: 'check_slots',
-      description: 'Check busy/booked appointment slots for a specific vet on a given date.',
+      description: 'Check busy slots for a vet on a date.',
       parameters: {
         type: 'object',
         properties: {
-          vetId: { type: 'string', description: 'The unique ID of the veterinarian.' },
-          date: { type: 'string', description: 'The target date in YYYY-MM-DD format.' },
+          vetId: { type: 'string' },
+          date: { type: 'string', description: 'YYYY-MM-DD' },
         },
         required: ['vetId', 'date'],
       },
@@ -243,17 +205,31 @@ export const AI_TOOLS = [
     type: 'function',
     function: {
       name: 'create_booking',
-      description: 'Book a new pet health appointment with a specific vet at their clinic.',
+      description: 'Book an appointment.',
       parameters: {
         type: 'object',
         properties: {
-          petId: { type: 'string', description: 'The unique ID of the pet.' },
-          vetId: { type: 'string', description: 'The unique ID of the veterinarian.' },
-          clinicId: { type: 'string', description: 'The unique ID of the clinic.' },
-          dateTime: { type: 'string', description: 'Target ISO date and time string (e.g. 2026-08-30T10:00:00Z).' },
-          reason: { type: 'string', description: 'Brief description of the visit reason.' },
+          petId: { type: 'string' },
+          vetId: { type: 'string' },
+          clinicId: { type: 'string' },
+          dateTime: { type: 'string', description: 'ISO date' },
+          reason: { type: 'string' },
         },
         required: ['petId', 'vetId', 'clinicId', 'dateTime', 'reason'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'cancel_appointment',
+      description: 'Cancel an existing appointment by its ID.',
+      parameters: {
+        type: 'object',
+        properties: {
+          appointmentId: { type: 'string' },
+        },
+        required: ['appointmentId'],
       },
     },
   },
@@ -282,6 +258,7 @@ export async function executeTool(name: string, argsStr: string, userId: string)
     case 'getMyPets': {
       const pets = await prisma.pet.findMany({
         where: { ownerId: userId },
+        select: { id: true, name: true, species: true, breed: true }
       });
       return JSON.stringify({ success: true, pets });
     }
@@ -337,27 +314,53 @@ export async function executeTool(name: string, argsStr: string, userId: string)
       const { petId } = args;
       if (!petId) throw new Error('Missing parameter: petId');
       await verifyPetOwnership(petId, userId);
-      const appointments = await prisma.appointment.findMany({ where: { petId } });
-      return JSON.stringify({ success: true, appointments });
+      const appointments = await prisma.appointment.findMany({ 
+        where: { petId },
+        select: {
+           id: true, dateTime: true, status: true, reason: true,
+           vet: { select: { user: { select: { firstName: true, lastName: true } } } },
+           clinic: { select: { name: true } }
+        }
+      });
+      const mapped = appointments.map(a => ({
+        id: a.id, dateTime: a.dateTime, status: a.status, reason: a.reason,
+        vet: `${a.vet.user.firstName} ${a.vet.user.lastName}`, clinic: a.clinic.name
+      }));
+      return JSON.stringify({ success: true, appointments: mapped });
     }
     case 'find_vet': {
       const { specialization } = args;
       const vets = await prisma.veterinarian.findMany({
         where: specialization ? { specialization: { contains: specialization, mode: 'insensitive' } } : {},
         include: {
-          user: { select: { firstName: true, lastName: true, email: true } },
-          clinics: { include: { clinic: true } }
+          user: { select: { firstName: true, lastName: true } },
+          clinics: { include: { clinic: { select: { id: true, name: true } } } }
         }
       });
-      return JSON.stringify({ success: true, veterinarians: vets });
+      const mappedVets = vets.map(v => ({
+        id: v.id,
+        name: `${v.user.firstName} ${v.user.lastName}`,
+        specialization: v.specialization,
+        clinicId: v.clinics?.[0]?.clinicId || null
+      }));
+      return JSON.stringify({ success: true, veterinarians: mappedVets });
     }
     case 'check_slots': {
       const { vetId, date } = args;
       if (!vetId || !date) throw new Error('Missing parameter: vetId or date');
+      
+      const targetDate = new Date(date);
+      const now = new Date();
+      
+      // We will still allow the current day, but we'll pad past hours as busy
       const startOfDay = new Date(date);
       startOfDay.setUTCHours(0, 0, 0, 0);
       const endOfDay = new Date(date);
       endOfDay.setUTCHours(23, 59, 59, 999);
+
+      if (endOfDay < now) {
+        return JSON.stringify({ success: false, error: 'PAST_DATE', message: 'The requested date is in the past. Please select a future date.' });
+      }
 
       const appointments = await prisma.appointment.findMany({
         where: {
@@ -367,7 +370,19 @@ export async function executeTool(name: string, argsStr: string, userId: string)
         },
         select: { dateTime: true }
       });
-      return JSON.stringify({ success: true, busySlots: appointments.map(a => a.dateTime) });
+      
+      const busySlots = appointments.map(a => a.dateTime);
+      
+      // Block past hours for today
+      for (let i = 0; i < 24; i++) {
+        const slotTime = new Date(startOfDay);
+        slotTime.setUTCHours(i);
+        if (slotTime <= now) {
+          busySlots.push(slotTime);
+        }
+      }
+
+      return JSON.stringify({ success: true, busySlots });
     }
     case 'create_booking': {
       const { petId, vetId, clinicId, dateTime, reason } = args;
@@ -376,6 +391,17 @@ export async function executeTool(name: string, argsStr: string, userId: string)
       }
       await verifyPetOwnership(petId, userId);
       const apptDate = new Date(dateTime);
+
+      if (apptDate <= new Date()) {
+        return JSON.stringify({ success: false, error: 'PAST_DATE', message: 'That date has already passed — please choose a future date.' });
+      }
+
+      // Working hours validation
+      const karachiTime = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: false }).format(apptDate);
+      const hour = parseInt(karachiTime);
+      if (hour < 9 || hour > 16) { 
+        return JSON.stringify({ success: false, error: 'OUTSIDE_WORKING_HOURS', message: 'Requested time is outside working hours (9 AM - 5 PM).' });
+      }
 
       // Check double booking
       const conflict = await prisma.appointment.findFirst({
@@ -401,6 +427,41 @@ export async function executeTool(name: string, argsStr: string, userId: string)
         }
       });
       return JSON.stringify({ success: true, appointment: appt });
+    }
+    case 'cancel_appointment': {
+      const { appointmentId } = args;
+      if (!appointmentId) throw new Error('Missing parameter: appointmentId');
+      
+      const appt = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+      if (!appt) {
+        return JSON.stringify({ success: false, error: 'NOT_FOUND', message: 'Appointment not found.' });
+      }
+      
+      if (appt.ownerId !== userId) {
+        return JSON.stringify({ success: false, error: 'FORBIDDEN', message: 'You are not authorized to cancel this appointment.' });
+      }
+      
+      if (appt.status === 'CANCELLED') {
+        return JSON.stringify({ success: false, error: 'ALREADY_CANCELLED', message: 'Appointment is already cancelled.' });
+      }
+
+      const updatedAppt = await prisma.appointment.update({
+        where: { id: appointmentId },
+        data: { status: 'CANCELLED' }
+      });
+      
+      // Audit Log
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'APPOINTMENT_UPDATED',
+          entity: 'Appointment',
+          entityId: appointmentId,
+          payload: JSON.stringify({ previousStatus: appt.status, newStatus: 'CANCELLED' }),
+        },
+      });
+
+      return JSON.stringify({ success: true, appointment: updatedAppt });
     }
     default:
       throw new Error(`Unknown tool: ${name}`);

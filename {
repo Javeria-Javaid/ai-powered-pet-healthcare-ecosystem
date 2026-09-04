@@ -1,0 +1,1 @@
+import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function main() { const appts = await prisma.appointment.findMany({ include: { pet: true } }); console.log('Current DB state:'); appts.forEach(a = let status = a.status; if ((status === 'REQUESTED' 

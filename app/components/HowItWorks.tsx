@@ -1,4 +1,6 @@
 'use client';
+import { User, PawPrint, Calendar, TrendingUp } from 'lucide-react';
+
 
 export default function HowItWorks() {
   return (
@@ -19,7 +21,7 @@ export default function HowItWorks() {
           {/* Step 1 */}
           <div className="flex flex-col items-center text-center gap-4 relative z-10">
             <div className="h-16 w-16 rounded-full bg-blue-50 border-2 border-blue-100 flex items-center justify-center text-blue-600 text-2xl shadow-md">
-              👤
+              <User className="inline w-4 h-4" />
             </div>
             <div>
               <h4 className="font-bold text-sm text-zinc-900">1. Create Account</h4>
@@ -32,7 +34,7 @@ export default function HowItWorks() {
           {/* Step 2 */}
           <div className="flex flex-col items-center text-center gap-4 relative z-10">
             <div className="h-16 w-16 rounded-full bg-blue-50 border-2 border-blue-100 flex items-center justify-center text-blue-600 text-2xl shadow-md">
-              🐾
+              <PawPrint className="inline w-4 h-4" />
             </div>
             <div>
               <h4 className="font-bold text-sm text-zinc-900">2. Add & Connect</h4>
@@ -45,7 +47,7 @@ export default function HowItWorks() {
           {/* Step 3 */}
           <div className="flex flex-col items-center text-center gap-4 relative z-10">
             <div className="h-16 w-16 rounded-full bg-blue-50 border-2 border-blue-100 flex items-center justify-center text-blue-600 text-2xl shadow-md">
-              📅
+              <Calendar className="inline w-4 h-4" />
             </div>
             <div>
               <h4 className="font-bold text-sm text-zinc-900">3. Manage Care</h4>
@@ -58,7 +60,7 @@ export default function HowItWorks() {
           {/* Step 4 */}
           <div className="flex flex-col items-center text-center gap-4 relative z-10">
             <div className="h-16 w-16 rounded-full bg-blue-50 border-2 border-blue-100 flex items-center justify-center text-blue-600 text-2xl shadow-md">
-              📈
+              <TrendingUp className="inline w-4 h-4" />
             </div>
             <div>
               <h4 className="font-bold text-sm text-zinc-900">4. Better Health</h4>

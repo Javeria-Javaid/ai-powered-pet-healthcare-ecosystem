@@ -1,4 +1,6 @@
 'use client';
+import { PawPrint } from 'lucide-react';
+
 
 interface CTASectionProps {
   onRegisterClick: () => void;
@@ -19,7 +21,7 @@ export default function CTASection({ onRegisterClick }: CTASectionProps) {
               />
             </div>
             {/* Soft decorative badge background decoration paw */}
-            <div className="absolute -bottom-2 -right-2 text-3xl">🐾</div>
+            <div className="absolute -bottom-2 -right-2 text-3xl"><PawPrint className="inline w-4 h-4" /></div>
           </div>
 
           {/* Middle text column */}

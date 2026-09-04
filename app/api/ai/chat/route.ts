@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
       data: {
         conversationId: activeConversationId,
         role: 'user',
-        content: message.replace(/\u202F/g, ' ').replace(/\u2011/g, '-'),
+        content: message,
       },
     });
 
@@ -315,7 +315,7 @@ ${activePetId ? `Active Pet ID: "${activePetId}". Prefer this pet's context.` : 
             data: {
               conversationId: activeConversationId,
               role: 'assistant',
-              content: finalContent.replace(/\u202F/g, ' ').replace(/\u2011/g, '-'),
+              content: finalContent,
             },
           });
 

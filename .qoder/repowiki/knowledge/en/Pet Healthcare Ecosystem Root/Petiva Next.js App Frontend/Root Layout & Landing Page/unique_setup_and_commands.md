@@ -1,0 +1,1 @@
+None beyond standard Next.js dev/build; the page dynamically injects the Google OAuth script from `https://accounts.google.com/gsi/client` and expects a `/api/auth/google/config` endpoint returning a `clientId`.

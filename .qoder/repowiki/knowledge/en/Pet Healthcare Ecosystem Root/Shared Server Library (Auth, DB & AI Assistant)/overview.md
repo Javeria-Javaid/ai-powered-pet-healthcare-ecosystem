@@ -1,0 +1,1 @@
+Server-side shared library providing Prisma database access, cookie-based session authentication with Argon2 hashing, and a pluggable multi-provider AI assistant that executes pet-booking tools against the database.

@@ -1,0 +1,1 @@
+Requires `DATABASE_URL`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and `BOOKING_ASSISTANT_PROVIDER` environment variables. Development relies on `globalThis`-scoped Prisma/pool reuse to avoid socket exhaustion across hot-reloads; production uses a per-process `pg.Pool`.

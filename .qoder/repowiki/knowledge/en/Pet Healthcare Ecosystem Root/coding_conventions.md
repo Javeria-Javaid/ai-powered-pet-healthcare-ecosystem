@@ -1,0 +1,4 @@
+- Protected routes are gated at the edge via `proxy.ts` middleware that checks the `session_token` cookie against a whitelist of path prefixes before any page or API handler runs.
+- Database access, authentication, and AI assistant calls are centralized in `lib_shared` and imported by both API routes and server components rather than duplicated per feature.
+- Prisma schema lives in `prisma/schema.prisma` and is the single source of truth for both migration generation and runtime client usage via `@prisma/client`.
+- Cross-module code shares a common TypeScript path alias `@/*` resolved to the project root via `tsconfig.json`.

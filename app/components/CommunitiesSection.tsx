@@ -1,4 +1,6 @@
 'use client';
+import { User, Check, Building2 } from 'lucide-react';
+
 
 interface CommunitiesSectionProps {
   onOwnerClick: () => void;
@@ -28,7 +30,7 @@ export default function CommunitiesSection({ onOwnerClick, onVetClick, onClinicC
             <div className="p-6 flex flex-col gap-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-teal-550 flex items-center justify-center text-white text-lg font-bold">
-                  👤
+                  <User className="inline w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-zinc-900">For Pet Owners</h3>
@@ -40,16 +42,16 @@ export default function CommunitiesSection({ onOwnerClick, onVetClick, onClinicC
 
               <ul className="flex flex-col gap-2 mt-2 text-xs font-semibold text-zinc-700">
                 <li className="flex items-center gap-2">
-                  <span className="text-teal-600">✓</span> Add & manage multiple pets
+                  <span className="text-teal-600"><Check className="inline w-4 h-4" /></span> Add & manage multiple pets
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-teal-600">✓</span> Track health history & vaccines
+                  <span className="text-teal-600"><Check className="inline w-4 h-4" /></span> Track health history & vaccines
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-teal-600">✓</span> Book appointments
+                  <span className="text-teal-600"><Check className="inline w-4 h-4" /></span> Book appointments
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-teal-600">✓</span> AI health assistant 24/7
+                  <span className="text-teal-600"><Check className="inline w-4 h-4" /></span> AI health assistant 24/7
                 </li>
               </ul>
             </div>
@@ -90,16 +92,16 @@ export default function CommunitiesSection({ onOwnerClick, onVetClick, onClinicC
 
               <ul className="flex flex-col gap-2 mt-2 text-xs font-semibold text-zinc-700">
                 <li className="flex items-center gap-2">
-                  <span className="text-violet-600">✓</span> View & manage appointments
+                  <span className="text-violet-600"><Check className="inline w-4 h-4" /></span> View & manage appointments
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-violet-600">✓</span> Access authorized records
+                  <span className="text-violet-600"><Check className="inline w-4 h-4" /></span> Access authorized records
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-violet-600">✓</span> Add medical records
+                  <span className="text-violet-600"><Check className="inline w-4 h-4" /></span> Add medical records
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-violet-600">✓</span> Grow your practice
+                  <span className="text-violet-600"><Check className="inline w-4 h-4" /></span> Grow your practice
                 </li>
               </ul>
             </div>
@@ -128,7 +130,7 @@ export default function CommunitiesSection({ onOwnerClick, onVetClick, onClinicC
             <div className="p-6 flex flex-col gap-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-lg font-bold">
-                  🏥
+                  <Building2 className="inline w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-zinc-900">For Clinics</h3>
@@ -140,16 +142,16 @@ export default function CommunitiesSection({ onOwnerClick, onVetClick, onClinicC
 
               <ul className="flex flex-col gap-2 mt-2 text-xs font-semibold text-zinc-700">
                 <li className="flex items-center gap-2">
-                  <span className="text-blue-600">✓</span> Clinic profile & management
+                  <span className="text-blue-600"><Check className="inline w-4 h-4" /></span> Clinic profile & management
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-blue-600">✓</span> Associate veterinarians
+                  <span className="text-blue-600"><Check className="inline w-4 h-4" /></span> Associate veterinarians
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-blue-600">✓</span> Streamlined appointments
+                  <span className="text-blue-600"><Check className="inline w-4 h-4" /></span> Streamlined appointments
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-blue-600">✓</span> Trusted by pet owners
+                  <span className="text-blue-600"><Check className="inline w-4 h-4" /></span> Trusted by pet owners
                 </li>
               </ul>
             </div>

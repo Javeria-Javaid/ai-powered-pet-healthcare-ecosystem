@@ -1,4 +1,6 @@
 'use client';
+import { X, PawPrint, Rocket } from 'lucide-react';
+
 
 import { useEffect } from 'react';
 
@@ -77,11 +79,11 @@ export default function AuthModal({
           onClick={onClose}
           className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg font-bold"
         >
-          ✕
+          <X className="inline w-4 h-4" />
         </button>
 
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-blue-600">🐾 PETIVA</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-blue-600"><PawPrint className="inline w-4 h-4" /> PETIVA</h1>
           <p className="text-sm text-zinc-500 mt-1.5 dark:text-zinc-400">
             {isRegistering ? 'Create your pet healthcare profile' : 'Sign in to access portals'}
           </p>
@@ -179,7 +181,7 @@ export default function AuthModal({
               onClick={() => handleGoogleCallback({ credential: `mock_google_token_owner-google-${Date.now()}@example.com_Jane_Google` })}
               className="w-full text-center rounded border border-zinc-300 py-2 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800 bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700"
             >
-              🚀 Continue with Mock Google (Dev Only)
+              <Rocket className="inline w-4 h-4" /> Continue with Mock Google (Dev Only)
             </button>
           )}
         </div>

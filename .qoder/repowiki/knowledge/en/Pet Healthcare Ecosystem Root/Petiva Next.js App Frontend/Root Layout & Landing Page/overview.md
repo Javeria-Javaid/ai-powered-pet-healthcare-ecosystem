@@ -1,0 +1,1 @@
+Defines the Next.js App Router root layout, global theme CSS, and the public landing page that composes the site's top-level sections and unified auth flow.

@@ -1,0 +1,1 @@
+Run `npm run dev` to start the Next.js dev server (which also serves the Prisma-backed APIs); database setup uses `npx prisma migrate dev` followed by the configured `prisma/seed.js` seed defined in `prisma.config.ts`.

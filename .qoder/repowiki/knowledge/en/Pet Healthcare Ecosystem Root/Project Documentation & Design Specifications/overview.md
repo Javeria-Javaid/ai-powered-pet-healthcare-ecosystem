@@ -1,0 +1,1 @@
+Centralized source-of-truth documentation for the Pet Healthcare Ecosystem, covering product vision, requirements, decisions, and technical architecture across product, requirements, and architecture layers.

@@ -1,0 +1,4 @@
+- Documents are numbered with zero-padded prefixes (e.g., `01-`, `02-`) to enforce a strict reading and evolution order within each category.
+- Each document section begins with a clear purpose statement distinguishing what the folder owns (product = what, requirements = confirmed decisions, architecture = how).
+- Architecture and security constraints are expressed as explicit prohibitions (e.g., AI must not diagnose autonomously, authorization must be enforced server-side, secrets must not appear in frontend code).
+- MVP and feature scope are enumerated with priority tiers so implementation can be gated against documented priorities rather than ad-hoc requests.

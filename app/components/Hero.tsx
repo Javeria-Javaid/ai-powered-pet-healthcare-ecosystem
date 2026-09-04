@@ -1,4 +1,6 @@
 'use client';
+import { PawPrint } from 'lucide-react';
+
 
 interface HeroProps {
   onRegisterClick: () => void;
@@ -11,12 +13,12 @@ export default function Hero({ onRegisterClick }: HeroProps) {
         {/* Left text column */}
         <div className="flex flex-col gap-6">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-700 w-fit">
-            <span>🐾</span> AI Powered Pet Healthcare Ecosystem
+            <span><PawPrint className="inline w-4 h-4" /></span> AI Powered Pet Healthcare Ecosystem
           </div>
 
           <h1 className="text-4xl md:text-6xl font-black tracking-tight leading-tight text-zinc-900">
             Better Health.<br />
-            <span className="text-blue-600">Happier Pets. 🐾</span>
+            <span className="text-blue-600">Happier Pets. <PawPrint className="inline w-4 h-4" /></span>
           </h1>
 
           <p className="text-base md:text-lg text-zinc-600 max-w-lg leading-relaxed">

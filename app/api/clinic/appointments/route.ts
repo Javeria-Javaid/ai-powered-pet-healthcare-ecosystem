@@ -81,7 +81,15 @@ export async function GET(req: NextRequest) {
       orderBy: { dateTime: 'asc' },
     });
 
-    return NextResponse.json({ success: true, appointments });
+    const now = new Date();
+    const mappedAppointments = appointments.map(appt => {
+      if ((appt.status === 'REQUESTED' || appt.status === 'CONFIRMED') && new Date(appt.dateTime) < now) {
+        return { ...appt, status: 'EXPIRED' };
+      }
+      return appt;
+    });
+
+    return NextResponse.json({ success: true, appointments: mappedAppointments });
   } catch (err: any) {
     if (err.message === 'UNAUTHENTICATED') {
       return NextResponse.json(

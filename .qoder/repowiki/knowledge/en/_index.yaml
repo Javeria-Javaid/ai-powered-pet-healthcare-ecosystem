@@ -1,0 +1,85 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: en-US
+branch: master
+nodes_managed: true
+exported_at: "2026-09-03T15:47:13Z"
+modules:
+    "":
+        dir_name: Pet Healthcare Ecosystem Root
+        title: Pet Healthcare Ecosystem Root
+        scope:
+            - README.md
+            - package.json
+            - next.config.ts
+            - tsconfig.json
+            - eslint.config.mjs
+            - postcss.config.mjs
+            - .gitignore
+            - AGENTS.md
+            - CLAUDE.md
+            - find_emojis.js
+            - fix.js
+            - package-lock.json
+            - prisma.config.ts
+            - proxy.ts
+            - replace_emojis.js
+            - skills-lock.json
+            - test_booking.ts
+            - test_deepseek_openrouter.js
+        source_files: []
+        children:
+            - app_frontend
+            - database_schema
+            - docs
+            - lib_shared
+        depends_on: []
+        related_to: []
+    app_frontend:
+        dir_name: Petiva Next.js App Frontend
+        title: Petiva Next.js App Frontend
+        scope:
+            - app/
+        source_files: []
+        children:
+            - app_frontend/root_layout
+        depends_on: []
+        related_to: []
+    app_frontend/root_layout:
+        dir_name: Root Layout & Landing Page
+        title: Root Layout & Landing Page
+        scope:
+            - app/layout.tsx
+            - app/page.tsx
+            - app/globals.css
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    database_schema:
+        dir_name: Prisma Database Schema & Seed Data
+        title: Prisma Database Schema & Seed Data
+        scope:
+            - prisma/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    docs:
+        dir_name: Project Documentation & Design Specifications
+        title: Project Documentation & Design Specifications
+        scope:
+            - docs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    lib_shared:
+        dir_name: Shared Server Library (Auth, DB & AI Assistant)
+        title: Shared Server Library (Auth, DB & AI Assistant)
+        scope:
+            - lib/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

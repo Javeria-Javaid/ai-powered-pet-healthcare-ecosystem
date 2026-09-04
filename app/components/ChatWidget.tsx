@@ -1,4 +1,6 @@
 'use client';
+import { Hand, X, MessageCircle, PawPrint } from 'lucide-react';
+
 
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -6,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([
-    { role: 'assistant', content: 'Hi there! 👋 I am the PETIVA assistant. Ask me anything about our platform, features, or how to register!' }
+    { role: 'assistant', content: 'Hi there! I am the PETIVA assistant. Ask me anything about our platform, features, or how to register!' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,7 +60,7 @@ export default function ChatWidget() {
         className="h-14 w-14 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-2xl flex items-center justify-center text-2xl transition cursor-pointer hover:scale-105 active:scale-95"
         title="Ask PETIVA AI"
       >
-        {isOpen ? '✕' : '💬'}
+        {isOpen ? <X className="inline w-4 h-4" /> : <MessageCircle className="inline w-4 h-4" />}
       </button>
 
       {/* Floating Panel Popup */}
@@ -67,14 +69,14 @@ export default function ChatWidget() {
           {/* Header */}
           <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <span className="text-xl">🐾</span>
+              <span className="text-xl"><PawPrint className="inline w-4 h-4" /></span>
               <div>
                 <h4 className="font-bold text-sm">PETIVA Assistant</h4>
                 <p className="text-[10px] opacity-80">Platform Info & Help</p>
               </div>
             </div>
             <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white text-sm">
-              ✕
+              <X className="inline w-4 h-4" />
             </button>
           </div>
 
@@ -117,18 +119,24 @@ export default function ChatWidget() {
           </div>
 
           {/* Input form */}
-          <form onSubmit={handleSend} className="p-3 border-t border-zinc-150 flex gap-2 bg-zinc-50">
-            <input
-              type="text"
+          <form onSubmit={handleSend} className="p-4 border-t border-zinc-150 flex gap-3 items-end">
+            <textarea
+              required
+              placeholder="Ask PETIVA anything..."
               value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder="Ask about PETIVA..."
-              className="flex-grow rounded-full border border-zinc-300 px-4 py-2 text-xs focus:outline-none focus:border-blue-600 bg-white"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (input.trim()) handleSend(e);
+                }
+              }}
+              rows={1}
+              className="flex-grow resize-none rounded-xl border border-zinc-300 px-4 py-3 text-sm min-h-[44px] max-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
             />
             <button
-              type="submit"
-              disabled={loading}
-              className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4 text-xs font-bold disabled:opacity-50"
+              type="submit" disabled={loading || !input.trim()}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center shrink-0 h-[44px]"
             >
               Send
             </button>

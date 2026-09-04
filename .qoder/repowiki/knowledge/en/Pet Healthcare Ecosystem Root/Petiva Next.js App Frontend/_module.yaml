@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: app_frontend
+title: Petiva Next.js App Frontend
+scope:
+    - app/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,25 @@
+schema_version: 1
+module_path: ""
+title: Pet Healthcare Ecosystem Root
+scope:
+    - README.md
+    - package.json
+    - next.config.ts
+    - tsconfig.json
+    - eslint.config.mjs
+    - postcss.config.mjs
+    - .gitignore
+    - AGENTS.md
+    - CLAUDE.md
+    - find_emojis.js
+    - fix.js
+    - package-lock.json
+    - prisma.config.ts
+    - proxy.ts
+    - replace_emojis.js
+    - skills-lock.json
+    - test_booking.ts
+    - test_deepseek_openrouter.js
+source_files: []
+depends_on: []
+related_to: []

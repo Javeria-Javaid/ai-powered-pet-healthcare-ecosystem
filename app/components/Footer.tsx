@@ -1,4 +1,6 @@
 'use client';
+import { PawPrint, Briefcase, Check, Copyright, Heart } from 'lucide-react';
+
 
 import { useState } from 'react';
 
@@ -20,7 +22,7 @@ export default function Footer() {
         {/* Brand column */}
         <div className="md:col-span-4 flex flex-col gap-4">
           <div className="flex items-center gap-2 text-white">
-            <span className="text-2xl">🐾</span>
+            <span className="text-2xl"><PawPrint className="inline w-4 h-4" /></span>
             <span className="text-xl font-bold tracking-tight">PETIVA</span>
           </div>
           <p className="text-xs text-zinc-500 leading-relaxed max-w-xs">
@@ -28,11 +30,11 @@ export default function Footer() {
           </p>
           {/* Social Icons */}
           <div className="flex items-center gap-4 mt-2 text-sm text-zinc-500">
-            <a href="#" className="hover:text-white transition">📘</a>
-            <a href="#" className="hover:text-white transition">📸</a>
-            <a href="#" className="hover:text-white transition">🐦</a>
-            <a href="#" className="hover:text-white transition">💼</a>
-            <a href="#" className="hover:text-white transition">📺</a>
+            <a href="#" className="hover:text-white transition">Facebook</a>
+            <a href="#" className="hover:text-white transition">Instagram</a>
+            <a href="#" className="hover:text-white transition">Twitter</a>
+            <a href="#" className="hover:text-white transition"><Briefcase className="inline w-4 h-4" /></a>
+            <a href="#" className="hover:text-white transition">YouTube</a>
           </div>
         </div>
 
@@ -82,7 +84,7 @@ export default function Footer() {
               type="submit"
               className="rounded bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 text-xs transition"
             >
-              {subscribed ? 'Subscribed! ✓' : 'Subscribe'}
+              {subscribed ? 'Subscribed! <Check className="inline w-4 h-4" />' : 'Subscribe'}
             </button>
           </form>
         </div>
@@ -91,13 +93,13 @@ export default function Footer() {
       {/* Bottom Copyright bar */}
       <div className="mx-auto max-w-7xl px-6 border-t border-zinc-900 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-zinc-600">
         <div className="flex flex-wrap gap-4">
-          <span>© {new Date().getFullYear()} PETIVA. All rights reserved.</span>
+          <span><Copyright className="inline w-4 h-4" /> {new Date().getFullYear()} PETIVA. All rights reserved.</span>
           <a href="#" className="hover:underline">Privacy Policy</a>
           <a href="#" className="hover:underline">Terms of Service</a>
           <a href="#" className="hover:underline">Cookie Policy</a>
         </div>
         <div>
-          <span>Made with ❤️ for pets and their people.</span>
+          <span>Made with <Heart className="inline w-4 h-4" /> for pets and their people.</span>
         </div>
       </div>
     </footer>

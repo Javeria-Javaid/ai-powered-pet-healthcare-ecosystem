@@ -1,0 +1,3 @@
+- API endpoints are implemented as Next.js Route Handlers under `app/api/<resource>/[id]/route.ts` following resource-based folder nesting.
+- Role-specific dashboards live in parallel top-level folders (`dashboard`, `clinic/dashboard`, `vet/dashboard`) rather than nested routes.
+- Public-facing UI is decomposed into small presentational components under `app/components/` and composed in the root layout and landing page.

@@ -1,0 +1,1 @@
+No build or runtime commands — this module is documentation-only. The README mandates that developers and AI coding agents consult these documents before making major implementation decisions and follow the prescribed feature-driven development workflow.

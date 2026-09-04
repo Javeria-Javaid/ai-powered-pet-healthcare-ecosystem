@@ -1,0 +1,6 @@
+- External secrets and feature toggles are read from `process.env` at module load time and exposed as module-level constants or constructor fields.
+- Database access goes exclusively through the singleton `prisma` instance exported from `db.ts`; direct `pg` connections are only used inside `db.ts` to construct the adapter.
+- Authentication helpers return typed `User | null` or throw named string errors (`UNAUTHENTICATED`, `FORBIDDEN`) rather than using custom exception classes.
+- New AI backends implement the `AIProvider` interface and are registered in `getAIProvider()` via an env-driven switch on `BOOKING_ASSISTANT_PROVIDER`.
+- AI tool handlers validate required arguments, enforce owner authorization via `verifyPetOwnership`, and always return JSON-stringified results with a `{ success, ... }` shape.
+- Sensitive tokens (session tokens) are never stored in plaintext: they are SHA-256 hashed via `hashSessionToken` before being persisted in the `Session` table.

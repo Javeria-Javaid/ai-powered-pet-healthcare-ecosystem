@@ -1,0 +1,1 @@
+Markdown-based documentation; the project targets Next.js + TypeScript frontend, Alibaba Cloud infrastructure (OSS, Qwen/Model Studio), and Prisma for relational data modeling as described in the architecture documents.

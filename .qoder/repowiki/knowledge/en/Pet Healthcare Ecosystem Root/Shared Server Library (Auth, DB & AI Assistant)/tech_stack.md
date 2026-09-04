@@ -1,0 +1,1 @@
+Prisma ORM with `@prisma/adapter-pg` over `pg` connection pools; Argon2 (`argon2.argon2id`) for password hashing; Next.js `next/headers` cookies API for session cookies; OpenRouter, Google Gemini, and Qwen LLM backends selected at runtime via `BOOKING_ASSISTANT_PROVIDER`.

@@ -47,8 +47,11 @@ export async function PUT(
       if (vet && appt.vetId === vet.id) {
         isAuthorized = true;
       }
-    } else if (user.role === 'CLINIC_ADMIN' || user.role === 'PLATFORM_ADMIN') {
-      // Admins have broad access (can manage clinics/verification status)
+    } else if (user.role === 'CLINIC_ADMIN') {
+      if (user.clinicId && user.clinicId === appt.clinicId) {
+        isAuthorized = true;
+      }
+    } else if (user.role === 'PLATFORM_ADMIN') {
       isAuthorized = true;
     }
 

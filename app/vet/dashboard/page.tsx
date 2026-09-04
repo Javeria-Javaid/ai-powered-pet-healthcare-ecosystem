@@ -1,4 +1,7 @@
 'use client';
+import VetChatInterface from '../../components/VetChatInterface';
+import { PawPrint, Home, Calendar, Users, Clipboard, Building2, User, Settings, LogOut, Hand, Clock, Dog, X, MessageCircle } from 'lucide-react';
+
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -24,7 +27,9 @@ export default function VetDashboard() {
   });
 
   // UI Nav Tab state
-  const [activeNav, setActiveNav] = useState<'dashboard' | 'appointments' | 'patients' | 'records' | 'clinic' | 'profile'>('dashboard');
+  const [activeNav, setActiveNav] = useState<'dashboard' | 'appointments' | 'patients' | 'records' | 'clinic' | 'profile' | 'messages'>('dashboard');
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<any>(null);
 
   // UI Editing & Input states
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -158,6 +163,24 @@ export default function VetDashboard() {
   }
 
   // Appointment Actions
+  
+  async function loadConversations() {
+    try {
+      const res = await fetch('/api/conversations');
+      if (res.ok) {
+        const data = await res.json();
+        setConversations(data.conversations);
+      }
+    } catch (e) {}
+  }
+
+  useEffect(() => {
+    if (activeNav === 'messages') {
+      loadConversations();
+      setSelectedConversation(null);
+    }
+  }, [activeNav]);
+
   async function handleUpdateApptStatus(apptId: string, status: 'CONFIRMED' | 'CANCELLED') {
     setError('');
     try {
@@ -197,8 +220,11 @@ export default function VetDashboard() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <p className="text-zinc-500 font-medium">Loading Veterinarian Portal...</p>
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 ">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-zinc-200 border-t-blue-600"></div>
+          <p className="text-zinc-500 font-medium">Loading Veterinarian Portal...</p>
+        </div>
       </div>
     );
   }
@@ -209,16 +235,16 @@ export default function VetDashboard() {
   const upcomingApptsCount = appointments.filter(a => new Date(a.dateTime) > new Date() && a.status !== 'CANCELLED').length;
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc] font-sans text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
+    <div className="flex min-h-screen bg-[#f8fafc] font-sans text-zinc-900  ">
       
       {/* 1. SIDEBAR NAVIGATION */}
-      <aside className="w-60 border-r border-zinc-150 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 flex flex-col justify-between shrink-0">
+      <aside className="w-60 border-r border-zinc-150 bg-white p-5   flex flex-col justify-between shrink-0 sticky top-0 h-screen overflow-y-auto">
         <div className="flex flex-col gap-6">
           {/* Logo Header */}
           <div className="flex flex-col gap-0.5 px-1 leading-tight">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">🐾</span>
-              <span className="text-base font-black tracking-tight text-zinc-900 dark:text-white">PETIVA</span>
+              <span className="text-2xl"><PawPrint className="inline w-4 h-4" /></span>
+              <span className="text-base font-black tracking-tight text-zinc-900 ">PETIVA</span>
             </div>
             <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest pl-8">Veterinarian</span>
           </div>
@@ -230,67 +256,84 @@ export default function VetDashboard() {
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
                 activeNav === 'dashboard'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
               }`}
             >
-              <span>🏠</span> Dashboard
+              <span><Home className="inline w-4 h-4" /></span> Dashboard
             </button>
             <button
               onClick={() => { setActiveNav('appointments'); }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
                 activeNav === 'appointments'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
               }`}
             >
-              <span>📅</span> Appointments
+              <span><Calendar className="inline w-4 h-4" /></span> Appointments
             </button>
+
+            <button
+              onClick={() => { setActiveNav('messages'); }}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeNav === 'messages'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span><MessageCircle className="inline w-4 h-4" /></span> Messages
+              </div>
+              {conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0) > 0 && (
+                 <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}</span>
+              )}
+            </button>
+
             <button
               onClick={() => { setActiveNav('patients'); }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
                 activeNav === 'patients'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
               }`}
             >
-              <span>👥</span> Patients
+              <span><Users className="inline w-4 h-4" /></span> Patients
             </button>
             <button
               onClick={() => { setActiveNav('records'); }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
                 activeNav === 'records'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
               }`}
             >
-              <span>📋</span> Health Records
+              <span><Clipboard className="inline w-4 h-4" /></span> Health Records
             </button>
             <button
               onClick={() => { setActiveNav('clinic'); }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
                 activeNav === 'clinic'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
               }`}
             >
-              <span>🏥</span> Clinic
+              <span><Building2 className="inline w-4 h-4" /></span> Clinic
             </button>
             <button
               onClick={() => { setActiveNav('profile'); }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
                 activeNav === 'profile'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
               }`}
             >
-              <span>👤</span> Profile
+              <span><User className="inline w-4 h-4" /></span> Profile
             </button>
           </nav>
         </div>
 
         {/* User profile & Logout */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between border-t border-zinc-100 pt-4 dark:border-zinc-800">
+          <div className="flex items-center justify-between border-t border-zinc-100 pt-4 ">
             <div className="flex items-center gap-2.5">
               <img
                 src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&q=80&w=100"
@@ -298,18 +341,18 @@ export default function VetDashboard() {
                 className="h-9 w-9 rounded-full object-cover border border-zinc-200"
               />
               <div className="text-left leading-tight">
-                <p className="text-xs font-bold text-zinc-900 dark:text-white">Dr. {vetProfile?.firstName} {vetProfile?.lastName}</p>
+                <p className="text-xs font-bold text-zinc-900 ">Dr. {vetProfile?.firstName} {vetProfile?.lastName}</p>
                 <p className="text-[10px] text-zinc-400 font-medium">Veterinarian</p>
               </div>
             </div>
-            <button onClick={() => { setActiveNav('profile'); }} className="text-zinc-400 hover:text-zinc-600">⚙</button>
+            <button onClick={() => { setActiveNav('profile'); }} className="text-zinc-400 hover:text-zinc-600"><Settings className="inline w-4 h-4" /></button>
           </div>
 
           <button
             onClick={handleLogout}
-            className="w-full border border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-850 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition text-zinc-700 dark:text-zinc-300"
+            className="w-full border border-zinc-200 hover:bg-zinc-50  :bg-zinc-850 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition text-zinc-700 "
           >
-            🚪 Logout
+            <LogOut className="inline w-4 h-4" /> Logout
           </button>
         </div>
       </aside>
@@ -317,13 +360,13 @@ export default function VetDashboard() {
       {/* 2. MAIN WORKSPACE */}
       <main className="flex-1 p-8 overflow-y-auto max-w-6xl">
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-600   ">
             {error}
           </div>
         )}
 
         {successMsg && (
-          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4 text-xs text-green-600 dark:border-green-800 dark:bg-green-950 dark:text-green-400">
+          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4 text-xs text-green-600   ">
             {successMsg}
           </div>
         )}
@@ -334,7 +377,7 @@ export default function VetDashboard() {
             {/* Welcome message header */}
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-2xl font-black text-zinc-950 dark:text-white leading-tight">Good morning, Dr. {vetProfile?.firstName}! 👋</h2>
+                <h2 className="text-2xl font-black text-zinc-950  leading-tight">Good morning, Dr. {vetProfile?.firstName}! <Hand className="inline w-4 h-4" /></h2>
                 <p className="text-xs text-zinc-400 mt-0.5">Here's your practice overview for today.</p>
               </div>
               <div className="flex items-center gap-4">
@@ -348,29 +391,29 @@ export default function VetDashboard() {
 
             {/* Stats row */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 text-xl font-bold dark:bg-blue-950/30">📅</div>
+              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm  ">
+                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 text-xl font-bold /30"><Calendar className="inline w-4 h-4" /></div>
                 <div>
                   <p className="text-2xl font-black">{todayAppts.length.toString().padStart(2, '0')}</p>
                   <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Today's Appointments</p>
                 </div>
               </div>
-              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 text-xl font-bold dark:bg-green-950/30">🕒</div>
+              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm  ">
+                <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 text-xl font-bold /30"><Clock className="inline w-4 h-4" /></div>
                 <div>
                   <p className="text-2xl font-black">{upcomingApptsCount.toString().padStart(2, '0')}</p>
                   <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Upcoming (Next 7 days)</p>
                 </div>
               </div>
-              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-xl font-bold dark:bg-purple-950/30">👥</div>
+              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm  ">
+                <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-xl font-bold /30"><Users className="inline w-4 h-4" /></div>
                 <div>
                   <p className="text-2xl font-black">{patients.length.toString().padStart(2, '0')}</p>
                   <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Patients Under Care</p>
                 </div>
               </div>
-              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 text-xl font-bold dark:bg-orange-950/30">📋</div>
+              <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm  ">
+                <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 text-xl font-bold /30"><Clipboard className="inline w-4 h-4" /></div>
                 <div>
                   <p className="text-2xl font-black">
                     {appointments.filter(a => a.status === 'REQUESTED').length.toString().padStart(2, '0')}
@@ -384,9 +427,9 @@ export default function VetDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               {/* Today's Appointments List (Left column 2/3) */}
-              <div className="lg:col-span-2 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="lg:col-span-2 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm  ">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-base font-bold text-zinc-900 dark:text-white">Today's Appointments</h3>
+                  <h3 className="text-base font-bold text-zinc-900 ">Today's Appointments</h3>
                   <button onClick={() => { setActiveNav('appointments'); }} className="text-xs text-blue-600 font-semibold hover:underline">View all appointments →</button>
                 </div>
 
@@ -396,7 +439,7 @@ export default function VetDashboard() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead>
-                        <tr className="border-b border-zinc-100 text-zinc-400 dark:border-zinc-800 font-semibold">
+                        <tr className="border-b border-zinc-100 text-zinc-400  font-semibold">
                           <th className="pb-3">Time</th>
                           <th className="pb-3">Pet</th>
                           <th className="pb-3">Owner</th>
@@ -406,14 +449,14 @@ export default function VetDashboard() {
                           <th className="pb-3 text-right">Action</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-zinc-50 dark:divide-zinc-850">
+                      <tbody className="divide-y divide-zinc-50 ">
                         {todayAppts.map(appt => (
-                          <tr key={appt.id} className="text-zinc-700 dark:text-zinc-300">
-                            <td className="py-3 font-semibold text-zinc-900 dark:text-white">
+                          <tr key={appt.id} className="text-zinc-700 ">
+                            <td className="py-3 font-semibold text-zinc-900 ">
                               {new Date(appt.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </td>
                             <td className="py-3 font-bold text-blue-600 flex items-center gap-2">
-                              <span>🐶</span> {appt.pet?.name}
+                              <span><Dog className="inline w-4 h-4" /></span> {appt.pet?.name}
                             </td>
                             <td className="py-3 font-medium">{appt.pet?.owner?.firstName} {appt.pet?.owner?.lastName}</td>
                             <td className="py-3 text-zinc-500">{appt.reason}</td>
@@ -442,10 +485,10 @@ export default function VetDashboard() {
               </div>
 
               {/* My Patients sidebar card (Right column 1/3) */}
-              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 flex flex-col justify-between">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm   flex flex-col justify-between">
                 <div>
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-base font-bold text-zinc-900 dark:text-white">My Patients</h3>
+                    <h3 className="text-base font-bold text-zinc-900 ">My Patients</h3>
                     <button onClick={() => { setActiveNav('patients'); }} className="text-xs text-blue-600 font-semibold hover:underline">View all patients →</button>
                   </div>
 
@@ -460,9 +503,9 @@ export default function VetDashboard() {
                           className="w-full flex items-center justify-between p-2 rounded-xl border border-zinc-100 bg-[#fbfcfd]/40 hover:bg-zinc-50 text-left transition"
                         >
                           <div className="flex items-center gap-2.5">
-                            <span className="text-lg">🐶</span>
+                            <span className="text-lg"><Dog className="inline w-4 h-4" /></span>
                             <div>
-                              <h4 className="font-bold text-xs text-zinc-900 dark:text-white">{patient.name}</h4>
+                              <h4 className="font-bold text-xs text-zinc-900 ">{patient.name}</h4>
                               <p className="text-[9px] text-zinc-400">{patient.breed || patient.species}</p>
                             </div>
                           </div>
@@ -477,7 +520,7 @@ export default function VetDashboard() {
                   onClick={() => { setActiveNav('patients'); }}
                   className="w-full mt-4 rounded-xl border border-zinc-150 py-2 text-center text-xs font-bold hover:bg-zinc-50"
                 >
-                  👥 View all patients
+                  <Users className="inline w-4 h-4" /> View all patients
                 </button>
               </div>
 
@@ -485,13 +528,13 @@ export default function VetDashboard() {
 
             {/* Quick Actions Row */}
             <div>
-              <h3 className="text-base font-bold text-zinc-900 dark:text-white mb-4">Quick Actions</h3>
+              <h3 className="text-base font-bold text-zinc-900  mb-4">Quick Actions</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button
                   onClick={() => { setActiveNav('appointments'); }}
                   className="rounded-2xl border border-zinc-150 bg-white p-4.5 text-left hover:bg-zinc-50 shadow-sm transition flex items-center gap-3"
                 >
-                  <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 text-lg">📅</div>
+                  <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 text-lg"><Calendar className="inline w-4 h-4" /></div>
                   <div>
                     <h4 className="font-bold text-xs text-zinc-900">New Appointment</h4>
                     <p className="text-[10px] text-zinc-400 mt-0.5">Schedule a clinic visit</p>
@@ -501,7 +544,7 @@ export default function VetDashboard() {
                   onClick={() => { setActiveNav('patients'); }}
                   className="rounded-2xl border border-zinc-150 bg-white p-4.5 text-left hover:bg-zinc-50 shadow-sm transition flex items-center gap-3"
                 >
-                  <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 text-lg">🐾</div>
+                  <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 text-lg"><PawPrint className="inline w-4 h-4" /></div>
                   <div>
                     <h4 className="font-bold text-xs text-zinc-900">Add New Patient</h4>
                     <p className="text-[10px] text-zinc-400 mt-0.5">Register a pet patient</p>
@@ -511,7 +554,7 @@ export default function VetDashboard() {
                   onClick={() => { setActiveNav('records'); }}
                   className="rounded-2xl border border-zinc-150 bg-white p-4.5 text-left hover:bg-zinc-50 shadow-sm transition flex items-center gap-3"
                 >
-                  <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-lg">📋</div>
+                  <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-lg"><Clipboard className="inline w-4 h-4" /></div>
                   <div>
                     <h4 className="font-bold text-xs text-zinc-900">Health Records</h4>
                     <p className="text-[10px] text-zinc-400 mt-0.5">View medical histories</p>
@@ -529,7 +572,7 @@ export default function VetDashboard() {
             <h3 className="text-xl font-bold">Appointments Schedule</h3>
             <div className="grid grid-cols-1 gap-4">
               {appointments.map(appt => (
-                <div key={appt.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 flex justify-between items-center">
+                <div key={appt.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm   flex justify-between items-center">
                   <div>
                     <span className="text-xs text-zinc-400">{new Date(appt.dateTime).toLocaleString()}</span>
                     <h4 className="font-bold text-sm mt-1">Pet Patient: {appt.pet?.name}</h4>
@@ -566,7 +609,7 @@ export default function VetDashboard() {
             <h3 className="text-xl font-bold">My Patients Index</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {patients.map(p => (
-                <div key={p.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 flex justify-between items-center">
+                <div key={p.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm   flex justify-between items-center">
                   <div>
                     <h4 className="font-bold text-sm">{p.name}</h4>
                     <p className="text-xs text-zinc-400 mt-0.5">{p.species} • {p.breed}</p>
@@ -598,7 +641,7 @@ export default function VetDashboard() {
             <h3 className="text-xl font-bold">Clinic Associations</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {clinics.map(c => (
-                <div key={c.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div key={c.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm  ">
                   <h4 className="font-bold text-sm text-blue-600">{c.name}</h4>
                   <p className="text-xs text-zinc-500 mt-1">{c.address}</p>
                 </div>
@@ -609,7 +652,7 @@ export default function VetDashboard() {
 
         {/* 2.6 PROFILE SETTINGS VIEW */}
         {activeNav === 'profile' && (
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm max-w-xl dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm max-w-xl  ">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold">Vet Profile Settings</h3>
               <button
@@ -630,7 +673,7 @@ export default function VetDashboard() {
                   <input
                     type="text" required
                     value={profileForm.firstName} onChange={e => setProfileForm({ ...profileForm, firstName: e.target.value })}
-                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm  "
                   />
                 </div>
 
@@ -639,7 +682,7 @@ export default function VetDashboard() {
                   <input
                     type="text" required
                     value={profileForm.lastName} onChange={e => setProfileForm({ ...profileForm, lastName: e.target.value })}
-                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm  "
                   />
                 </div>
 
@@ -648,7 +691,7 @@ export default function VetDashboard() {
                   <input
                     type="text"
                     value={profileForm.specialization} onChange={e => setProfileForm({ ...profileForm, specialization: e.target.value })}
-                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm  "
                   />
                 </div>
 
@@ -657,7 +700,7 @@ export default function VetDashboard() {
                   <input
                     type="text"
                     value={profileForm.phone} onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
-                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                    className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm  "
                   />
                 </div>
 
@@ -670,19 +713,19 @@ export default function VetDashboard() {
               </form>
             ) : (
               <div className="flex flex-col gap-4 text-sm">
-                <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                <div className="border-b border-zinc-100 pb-3 ">
                   <p className="text-xs text-zinc-400">Full Name</p>
                   <p className="font-semibold mt-0.5">Dr. {vetProfile?.firstName} {vetProfile?.lastName}</p>
                 </div>
-                <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                <div className="border-b border-zinc-100 pb-3 ">
                   <p className="text-xs text-zinc-400">License Number</p>
                   <p className="font-semibold mt-0.5">{vetProfile?.licenseNumber}</p>
                 </div>
-                <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                <div className="border-b border-zinc-100 pb-3 ">
                   <p className="text-xs text-zinc-400">Specialization</p>
                   <p className="font-semibold mt-0.5">{vetProfile?.specialization || 'General Practice'}</p>
                 </div>
-                <div className="border-b border-zinc-100 pb-3 dark:border-zinc-800">
+                <div className="border-b border-zinc-100 pb-3 ">
                   <p className="text-xs text-zinc-400">Contact Phone</p>
                   <p className="font-semibold mt-0.5">{vetProfile?.phone || 'Not Specified'}</p>
                 </div>
@@ -694,22 +737,90 @@ export default function VetDashboard() {
             )}
           </div>
         )}
+      
+        {/* MESSAGES VIEW */}
+        {activeNav === 'messages' && vetProfile && (
+          <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {selectedConversation ? (
+              <VetChatInterface 
+                conversationId={selectedConversation.id}
+                conversationContext={selectedConversation}
+                currentUserId={vetProfile?.userId}
+                onBack={() => { setSelectedConversation(null); loadConversations(); }}
+              />
+            ) : (
+              <>
+                <h3 className="text-xl font-bold">Messages</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  {conversations.length === 0 ? (
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+                      <p className="text-sm text-zinc-500">You have no messages yet.</p>
+                    </div>
+                  ) : (
+                    conversations.map(conv => (
+                      <div 
+                        key={conv.id} 
+                        onClick={() => setSelectedConversation(conv)}
+                        className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm hover:shadow-md cursor-pointer transition flex items-center justify-between"
+                      >
+                        <div className="flex gap-4 items-center">
+                          <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold">
+                             {conv.pet?.name?.charAt(0)}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                               <h4 className="font-bold text-sm text-zinc-900">{conv.pet?.name} <span className="text-zinc-400 font-normal">({conv.owner?.firstName} {conv.owner?.lastName})</span></h4>
+                               {conv.unreadCount > 0 && (
+                                  <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{conv.unreadCount}</span>
+                               )}
+                            </div>
+                            <p className="text-[11px] text-zinc-500 mt-1 line-clamp-1 max-w-sm">
+                              {conv.latestMessage ? (
+                                <>
+                                  <span className="font-semibold">{conv.latestMessage.senderId === vetProfile?.userId ? 'You: ' : ''}</span>
+                                  {conv.latestMessage.content}
+                                </>
+                              ) : (
+                                'No messages yet'
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end">
+                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                             {new Date(conv.appointment?.dateTime).toLocaleDateString()}
+                          </span>
+                          {conv.latestMessage && (
+                            <span className="text-[10px] text-zinc-400 mt-1">
+                               {new Date(conv.latestMessage.createdAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
       </main>
 
       {/* 3. PATIENT HISTORY DIALOG OVERLAY */}
       {selectedPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 flex flex-col gap-4 max-h-[85vh] overflow-y-auto text-zinc-900 dark:text-zinc-50">
+          <div className="relative w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl   flex flex-col gap-4 max-h-[85vh] overflow-y-auto text-zinc-900 ">
             <div className="flex justify-between items-center mb-1">
               <div>
                 <h3 className="text-lg font-bold">Patient Chart: {selectedPatient.name}</h3>
                 <p className="text-xs text-zinc-400 mt-0.5">Owner: {selectedPatient.owner?.firstName} {selectedPatient.owner?.lastName} ({selectedPatient.owner?.email})</p>
               </div>
-              <button onClick={() => setSelectedPatient(null)} className="text-zinc-400 hover:text-zinc-600 font-bold">✕</button>
+              <button onClick={() => setSelectedPatient(null)} className="text-zinc-400 hover:text-zinc-600 font-bold"><X className="inline w-4 h-4" /></button>
             </div>
 
             {/* Patient Attributes */}
-            <div className="grid grid-cols-4 gap-4 p-3 bg-zinc-50 rounded-xl dark:bg-zinc-900/50">
+            <div className="grid grid-cols-4 gap-4 p-3 bg-zinc-50 rounded-xl /50">
               <div>
                 <p className="text-[10px] text-zinc-400 uppercase font-semibold">Species</p>
                 <p className="text-xs font-bold mt-0.5">{selectedPatient.species}</p>
@@ -731,7 +842,7 @@ export default function VetDashboard() {
             {/* Medical Logs timeline */}
             <div>
               <div className="flex justify-between items-center mb-3">
-                <h4 className="font-bold text-xs text-zinc-800 dark:text-zinc-300">Clinical Diagnosis Records</h4>
+                <h4 className="font-bold text-xs text-zinc-800 ">Clinical Diagnosis Records</h4>
                 <button
                   onClick={() => setIsAddingRecord(!isAddingRecord)}
                   className="text-xs font-semibold text-blue-600 hover:underline"
@@ -741,13 +852,13 @@ export default function VetDashboard() {
               </div>
 
               {isAddingRecord && (
-                <form onSubmit={handleAddRecord} className="rounded-xl border border-zinc-150 p-4 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-3 mb-4">
+                <form onSubmit={handleAddRecord} className="rounded-xl border border-zinc-150 p-4 bg-zinc-50/50 /30 flex flex-col gap-3 mb-4">
                   <div>
                     <label className="text-xs font-semibold text-zinc-500 block mb-1">Symptoms</label>
                     <input
                       type="text" required placeholder="Limping on hind left leg"
                       value={recordForm.symptoms} onChange={e => setRecordForm({ ...recordForm, symptoms: e.target.value })}
-                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-xs dark:bg-zinc-800"
+                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-xs "
                     />
                   </div>
                   <div>
@@ -755,7 +866,7 @@ export default function VetDashboard() {
                     <input
                       type="text" required placeholder="Minor strain"
                       value={recordForm.diagnosis} onChange={e => setRecordForm({ ...recordForm, diagnosis: e.target.value })}
-                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-xs dark:bg-zinc-800"
+                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-xs "
                     />
                   </div>
                   <div>
@@ -763,7 +874,7 @@ export default function VetDashboard() {
                     <input
                       type="text" required placeholder="Rest for 5 days"
                       value={recordForm.treatmentPlan} onChange={e => setRecordForm({ ...recordForm, treatmentPlan: e.target.value })}
-                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-xs dark:bg-zinc-800"
+                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-xs "
                     />
                   </div>
                   <div>
@@ -771,7 +882,7 @@ export default function VetDashboard() {
                     <textarea
                       placeholder="Optional notes..."
                       value={recordForm.notes} onChange={e => setRecordForm({ ...recordForm, notes: e.target.value })}
-                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-xs dark:bg-zinc-800"
+                      className="w-full rounded border border-zinc-300 px-3 py-1.5 text-xs "
                     />
                   </div>
                   <button type="submit" className="rounded bg-blue-600 py-1.5 text-xs font-bold text-white hover:bg-blue-700">
@@ -787,7 +898,7 @@ export default function VetDashboard() {
                   {history.medicalRecords.map((rec: any, idx: number) => (
                     <div key={idx} className="rounded-xl border border-zinc-150 p-3 bg-zinc-50/20 text-xs">
                       <div className="flex justify-between items-start mb-2">
-                        <span className="font-bold text-zinc-800 dark:text-zinc-200">Symptom: {rec.symptoms}</span>
+                        <span className="font-bold text-zinc-800 ">Symptom: {rec.symptoms}</span>
                         <span className="text-[10px] text-zinc-400">{new Date(rec.createdAt).toLocaleDateString()}</span>
                       </div>
                       <p><strong>Diagnosis:</strong> {rec.diagnosis}</p>
@@ -802,7 +913,7 @@ export default function VetDashboard() {
             {/* Additional Info Grid (Allergies & Vaccinations) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
               <div>
-                <h4 className="font-bold text-xs text-zinc-800 dark:text-zinc-300 mb-2">Vaccinations</h4>
+                <h4 className="font-bold text-xs text-zinc-800  mb-2">Vaccinations</h4>
                 {history.vaccinations.length === 0 ? (
                   <p className="text-[11px] text-zinc-400 italic">No vaccinations recorded.</p>
                 ) : (
@@ -814,7 +925,7 @@ export default function VetDashboard() {
                 )}
               </div>
               <div>
-                <h4 className="font-bold text-xs text-zinc-800 dark:text-zinc-300 mb-2">Allergies</h4>
+                <h4 className="font-bold text-xs text-zinc-800  mb-2">Allergies</h4>
                 {history.allergies.length === 0 ? (
                   <p className="text-[11px] text-zinc-400 italic">No allergies recorded.</p>
                 ) : (

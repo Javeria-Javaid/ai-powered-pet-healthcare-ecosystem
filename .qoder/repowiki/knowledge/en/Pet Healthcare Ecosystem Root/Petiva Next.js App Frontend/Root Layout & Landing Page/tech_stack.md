@@ -1,0 +1,1 @@
+Next.js App Router with React Server Components for layout and a client component for the landing page; Tailwind CSS v4 via `@import "tailwindcss"` with inline `@theme` tokens; Google Identity Services SDK loaded dynamically at runtime.

@@ -1,0 +1,4 @@
+- Role-based routing after authentication: login, register, and Google callback all resolve the user role and push to one of three dashboard routes (`/vet/dashboard`, `/clinic/dashboard`, `/dashboard`).
+- Client-side auth state is managed with local `useState` hooks (`isRegistering`, `email`, `password`, `role`, `error`, `loading`, `showAuthModal`) and passed down to the shared `AuthModal` component.
+- API calls use plain `fetch` against relative `/api/auth/*` endpoints with `application/json` bodies and handle both success and error branches before closing the modal.
+- Global theming is centralized in `globals.css` using CSS custom properties exposed through Tailwind's `@theme inline` block rather than ad-hoc color values.

@@ -1,0 +1,1 @@
+Next.js 16 App Router with React 19, TypeScript 5, Tailwind CSS 4, Prisma 7 with PostgreSQL adapter (`@prisma/adapter-pg`), Argon2 for password hashing, and ESLint 9 — shared uniformly across the frontend, shared library, and Prisma layers.

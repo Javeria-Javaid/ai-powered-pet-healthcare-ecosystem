@@ -68,7 +68,8 @@ export async function POST(req: NextRequest) {
 You must ONLY answer general questions about the platform, its features, pricing, sign up instructions, and navigation.
 You do NOT have access to user-specific data (no pet profiles, appointments, or medical records).
 If the user asks about specific pets, medical histories, or appointments, politely instruct them to sign in or sign up first.
-Keep your answers brief, friendly, and helpful.`,
+Keep your answers brief, friendly, and helpful.
+Do not use emojis in responses.`,
     };
 
     const fullMessages = [systemPrompt, ...messages];
@@ -90,7 +91,8 @@ Keep your answers brief, friendly, and helpful.`,
 You must ONLY answer general questions about the platform, its features, pricing, sign up instructions, and navigation.
 You do NOT have access to user-specific data (no pet profiles, appointments, or medical records).
 If the user asks about specific pets, medical histories, or appointments, politely instruct them to sign in or sign up first.
-Keep your answers brief, friendly, and helpful.`,
+Keep your answers brief, friendly, and helpful.
+Do not use emojis in responses.`,
       };
       const { messages } = await req.json();
       const fullMessages = [systemPrompt, ...messages];

@@ -36,9 +36,11 @@ export async function GET(req: NextRequest) {
         orderBy: { dateTime: 'desc' },
       });
     } else if (user.role === 'CLINIC_ADMIN') {
-      // Clinic admins manage appointments in their clinics.
-      // For MVP, return all appointments (or filter by clinic if clinic links are established)
+      if (!user.clinicId) {
+        return NextResponse.json({ success: true, appointments: [] });
+      }
       appointments = await prisma.appointment.findMany({
+        where: { clinicId: user.clinicId },
         include: {
           pet: true,
           vet: { include: { user: { select: { firstName: true, lastName: true } } } },
@@ -49,7 +51,15 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, appointments });
+    const now = new Date();
+    const mappedAppointments = appointments.map(appt => {
+      if ((appt.status === 'REQUESTED' || appt.status === 'CONFIRMED') && new Date(appt.dateTime) < now) {
+        return { ...appt, status: 'EXPIRED' };
+      }
+      return appt;
+    });
+
+    return NextResponse.json({ success: true, appointments: mappedAppointments });
   } catch (err: any) {
     if (err.message === 'UNAUTHENTICATED') {
       return NextResponse.json(
@@ -78,6 +88,13 @@ export async function POST(req: NextRequest) {
     }
 
     const apptDate = new Date(dateTime);
+
+    if (apptDate <= new Date()) {
+      return NextResponse.json(
+        { success: false, error: { code: 'BAD_REQUEST', message: 'That date has already passed — please choose a future date.' } },
+        { status: 400 }
+      );
+    }
 
     // Enforce pet ownership authorization check
     const pet = await prisma.pet.findUnique({ where: { id: petId } });

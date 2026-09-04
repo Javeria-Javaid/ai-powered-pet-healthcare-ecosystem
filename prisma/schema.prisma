@@ -28,28 +28,30 @@ enum AppointmentStatus {
 }
 
 model User {
-  id             String                 @id @default(uuid())
-  email          String                 @unique
-  passwordHash   String?
-  role           UserRole
-  firstName      String
-  lastName       String
-  phone          String?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
-  pets           Pet[]
-  vetProfile     Veterinarian?          @relation("VetUser")
-  appointments   Appointment[]
-  notifications  Notification[]
-  reminders      Reminder[]
-  conversations  AIConversation[]
-  auditLogs      AuditLog[]             @relation("AuditUser")
-  editedVersions MedicalRecordVersion[]
-  uploadedDocs   Document[]
-  sessions       Session[]
-  verifiedVets   Veterinarian[]         @relation("Verifier")
-  clinicId       String?
-  clinic         Clinic?                @relation("ClinicAdmins", fields: [clinicId], references: [id], onDelete: SetNull)
+  id                 String                 @id @default(uuid())
+  email              String                 @unique
+  passwordHash       String?
+  role               UserRole
+  firstName          String
+  lastName           String
+  phone              String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  pets               Pet[]
+  vetProfile         Veterinarian?          @relation("VetUser")
+  appointments       Appointment[]
+  notifications      Notification[]
+  reminders          Reminder[]
+  conversations      AIConversation[]
+  auditLogs          AuditLog[]             @relation("AuditUser")
+  ownerConversations Conversation[]         @relation("OwnerConversations")
+  sentMessages       Message[]              @relation("SentMessages")
+  editedVersions     MedicalRecordVersion[]
+  uploadedDocs       Document[]
+  sessions           Session[]
+  verifiedVets       Veterinarian[]         @relation("Verifier")
+  clinicId           String?
+  clinic             Clinic?                @relation("ClinicAdmins", fields: [clinicId], references: [id], onDelete: SetNull)
 }
 
 model Session {
@@ -66,17 +68,17 @@ model Session {
 }
 
 model Pet {
-  id             String          @id @default(uuid())
+  id             String            @id @default(uuid())
   ownerId        String
-  owner          User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner          User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name           String
   species        String
   breed          String?
   gender         String?
   dateOfBirth    DateTime?
   weight         Decimal?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
   medicalRecords MedicalRecord[]
   vaccinations   Vaccination[]
   medications    Medication[]
@@ -85,6 +87,7 @@ model Pet {
   metrics        HealthMetric[]
   documents      Document[]
   appointments   Appointment[]
+  conversations  Conversation[]
 }
 
 model Veterinarian {
@@ -102,6 +105,7 @@ model Veterinarian {
   clinics        VetClinicAssociation[]
   appointments   Appointment[]
   medicalRecords MedicalRecord[]
+  conversations  Conversation[]         @relation("VetConversations")
 }
 
 model Clinic {
@@ -131,15 +135,15 @@ model VetClinicAssociation {
 }
 
 model MedicalRecord {
-  id        String                 @id @default(uuid())
-  petId     String
-  pet       Pet                    @relation(fields: [petId], references: [id], onDelete: Cascade)
-  vetId     String?
-  vet       Veterinarian?          @relation(fields: [vetId], references: [id])
-  clinicId  String?
-  clinic    Clinic?                @relation(fields: [clinicId], references: [id])
-  createdAt DateTime               @default(now())
-  versions  MedicalRecordVersion[]
+  id            String                 @id @default(uuid())
+  petId         String
+  pet           Pet                    @relation(fields: [petId], references: [id], onDelete: Cascade)
+  vetId         String?
+  vet           Veterinarian?          @relation(fields: [vetId], references: [id])
+  clinicId      String?
+  clinic        Clinic?                @relation(fields: [clinicId], references: [id])
+  createdAt     DateTime               @default(now())
+  versions      MedicalRecordVersion[]
   prescriptions Prescription[]
 
   @@index([petId])
@@ -162,19 +166,20 @@ model MedicalRecordVersion {
 }
 
 model Appointment {
-  id        String            @id @default(uuid())
-  petId     String
-  pet       Pet               @relation(fields: [petId], references: [id], onDelete: Cascade)
-  ownerId   String
-  owner     User              @relation(fields: [ownerId], references: [id])
-  vetId     String
-  vet       Veterinarian      @relation(fields: [vetId], references: [id])
-  clinicId  String
-  clinic    Clinic            @relation(fields: [clinicId], references: [id])
-  dateTime  DateTime
-  reason    String
-  status    AppointmentStatus @default(REQUESTED)
-  createdAt DateTime          @default(now())
+  id           String            @id @default(uuid())
+  petId        String
+  pet          Pet               @relation(fields: [petId], references: [id], onDelete: Cascade)
+  ownerId      String
+  owner        User              @relation(fields: [ownerId], references: [id])
+  vetId        String
+  vet          Veterinarian      @relation(fields: [vetId], references: [id])
+  clinicId     String
+  clinic       Clinic            @relation(fields: [clinicId], references: [id])
+  dateTime     DateTime
+  reason       String
+  status       AppointmentStatus @default(REQUESTED)
+  createdAt    DateTime          @default(now())
+  conversation Conversation?
 
   @@index([vetId, dateTime])
   @@index([ownerId])
@@ -225,19 +230,19 @@ model Allergy {
 }
 
 model HealthCondition {
-  id         String    @id @default(uuid())
-  petId      String
-  pet        Pet       @relation(fields: [petId], references: [id], onDelete: Cascade)
-  name       String
-  onsetDate  DateTime?
-  status     String    @default("ACTIVE")
+  id        String    @id @default(uuid())
+  petId     String
+  pet       Pet       @relation(fields: [petId], references: [id], onDelete: Cascade)
+  name      String
+  onsetDate DateTime?
+  status    String    @default("ACTIVE")
 }
 
 model HealthMetric {
   id         String   @id @default(uuid())
   petId      String
-  pet       Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
-  metricType String   // e.g. "WEIGHT", "TEMPERATURE"
+  pet        Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  metricType String // e.g. "WEIGHT", "TEMPERATURE"
   value      Decimal
   unit       String
   takenAt    DateTime @default(now())
@@ -246,7 +251,7 @@ model HealthMetric {
 model Document {
   id         String   @id @default(uuid())
   petId      String
-  pet       Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  pet        Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
   uploaderId String
   uploader   User     @relation(fields: [uploaderId], references: [id])
   ossKey     String
@@ -290,7 +295,7 @@ model AIMessage {
   id             String         @id @default(uuid())
   conversationId String
   conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String         // "user" or "assistant"
+  role           String // "user" or "assistant"
   content        String
   createdAt      DateTime       @default(now())
 }
@@ -299,13 +304,46 @@ model AuditLog {
   id        String   @id @default(uuid())
   userId    String?
   user      User?    @relation("AuditUser", fields: [userId], references: [id], onDelete: SetNull)
-  action    String   // e.g. "RECORD_CORRECTED", "VET_GRANTED_ACCESS"
-  entity    String   // e.g. "MedicalRecord", "Pet"
+  action    String // e.g. "RECORD_CORRECTED", "VET_GRANTED_ACCESS"
+  entity    String // e.g. "MedicalRecord", "Pet"
   entityId  String
-  payload   String   // JSON string of changes
+  payload   String // JSON string of changes
   timestamp DateTime @default(now())
 
   @@index([userId])
   @@index([entity, entityId])
   @@index([timestamp])
+}
+
+model Conversation {
+  id             String        @id @default(uuid())
+  appointmentId  String?       @unique
+  appointment    Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  petId          String?
+  pet            Pet?          @relation(fields: [petId], references: [id], onDelete: SetNull)
+  ownerId        String?
+  owner          User?         @relation("OwnerConversations", fields: [ownerId], references: [id], onDelete: SetNull)
+  veterinarianId String?
+  veterinarian   Veterinarian? @relation("VetConversations", fields: [veterinarianId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  messages       Message[]
+
+  @@index([ownerId])
+  @@index([veterinarianId])
+  @@index([petId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String?
+  sender         User?        @relation("SentMessages", fields: [senderId], references: [id], onDelete: SetNull)
+  content        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  readAt         DateTime?
+
+  @@index([conversationId, createdAt])
 }

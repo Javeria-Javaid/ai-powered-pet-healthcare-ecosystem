@@ -1,0 +1,1 @@
+Defines the PostgreSQL data model for the pet healthcare application via Prisma, including user/clinic/vet/pet/medical-record entities and a seed script that populates sample data.

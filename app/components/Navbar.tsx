@@ -14,7 +14,7 @@ export default function Navbar({ onLoginClick, onRegisterClick }: NavbarProps) {
         {/* Logo */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
           <span className="text-2xl"><PawPrint className="inline w-4 h-4" /></span>
-          <span className="text-xl font-bold tracking-tight text-zinc-900">PETIVA</span>
+          <span className="text-xl font-serif font-bold tracking-tight text-zinc-900">PETIVA</span>
         </div>
 
         {/* Desktop Nav Links */}

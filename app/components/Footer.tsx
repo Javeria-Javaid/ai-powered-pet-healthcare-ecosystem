@@ -23,7 +23,7 @@ export default function Footer() {
         <div className="md:col-span-4 flex flex-col gap-4">
           <div className="flex items-center gap-2 text-white">
             <span className="text-2xl"><PawPrint className="inline w-4 h-4" /></span>
-            <span className="text-xl font-bold tracking-tight">PETIVA</span>
+            <span className="text-xl font-serif font-bold tracking-tight">PETIVA</span>
           </div>
           <p className="text-xs text-zinc-500 leading-relaxed max-w-xs">
             An AI-powered pet healthcare ecosystem connecting pet owners, veterinarians, and clinics for better care and healthier pets.

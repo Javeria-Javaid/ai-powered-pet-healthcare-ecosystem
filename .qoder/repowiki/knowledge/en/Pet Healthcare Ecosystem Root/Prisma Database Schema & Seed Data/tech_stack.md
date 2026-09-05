@@ -1,0 +1,1 @@
+Prisma ORM targeting PostgreSQL with `prisma-client-js`; `@prisma/adapter-pg` with `pg` Pool for seeding; argon2 for password hashing; Prisma Migrate for schema evolution.

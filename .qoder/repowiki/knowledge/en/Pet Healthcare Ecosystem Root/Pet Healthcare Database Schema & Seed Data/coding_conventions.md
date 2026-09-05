@@ -1,6 +1,0 @@
-- Every entity uses a UUID primary key generated at the database level via `@id @default(uuid())`.
-- Timestamped audit fields `createdAt` (defaulting to `now()`) and `updatedAt` (auto-updated) are added to all persistent models.
-- Foreign-key relationships specify explicit `onDelete` behavior, typically `Cascade` for child records and `SetNull` for optional references such as clinic admins or conversation participants.
-- Domain state is modeled with Prisma enums (e.g. `UserRole`, `AssociationStatus`, `AppointmentStatus`) rather than free-form strings.
-- Frequently queried columns are annotated with `@@index` pragmas (e.g. `userId`, `expiresAt`, `petId`, `vetId+dateTime`, `entity+entityId`).
-- Seeding uses deterministic placeholder UUIDs combined with `upsert` so the script is idempotent across repeated runs.

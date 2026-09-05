@@ -71,6 +71,18 @@ export async function PUT(
         );
       }
 
+      // Same working-hours rule as booking creation (9 AM - 5 PM Asia/Karachi), so the times
+      // offered by the slots endpoint are exactly the times accepted here
+      const karachiHour = parseInt(
+        new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: false }).format(newDate)
+      );
+      if (karachiHour < 9 || karachiHour > 16) {
+        return NextResponse.json(
+          { success: false, error: { code: 'OUTSIDE_WORKING_HOURS', message: 'Requested time is outside working hours (9 AM - 5 PM).' } },
+          { status: 400 }
+        );
+      }
+
       if (newDate.getTime() === appt.dateTime.getTime()) {
         return NextResponse.json(
           { success: false, error: { code: 'BAD_REQUEST', message: 'The new time is the same as the current appointment time.' } },

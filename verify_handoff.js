@@ -183,9 +183,10 @@ async function main() {
     console.log('  SKIP: could not establish intruder session');
   }
 
-  console.log('=== TEST 8: Reschedule appointment (owner-only, resets to REQUESTED) ===');
+  console.log('=== TEST 8: Reschedule (slot options, owner-only, resets to REQUESTED) ===');
+  const karachiFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' });
   const reschedBase = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000);
-  reschedBase.setUTCHours(12, 0, 0, 0);
+  reschedBase.setUTCHours(5, 0, 0, 0); // 10 AM Karachi, within working hours
   const reschedBookRes = await fetch(`${BASE}/api/appointments`, {
     method: 'POST',
     headers: authed(owner.cookie),
@@ -201,7 +202,58 @@ async function main() {
   if (reschedBookData.success) {
     const raId = reschedBookData.appointment.id;
 
-    // 8.1 Past-date reschedule rejected
+    // A far-future date for slot-option checks (nothing else booked that day)
+    const targetDate = karachiFmt.format(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+    // 8.1 Slot options reject invalid date format
+    const badSlots = await fetch(`${BASE}/api/appointments/${raId}/slots?date=not-a-date`, { headers: authed(owner.cookie) });
+    check('Slot options reject invalid date (400)', badSlots.status === 400, `Got ${badSlots.status}`);
+
+    // 8.2 Slot options reject past date
+    const pastSlotsDate = karachiFmt.format(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000));
+    const pastSlots = await fetch(`${BASE}/api/appointments/${raId}/slots?date=${pastSlotsDate}`, { headers: authed(owner.cookie) });
+    check('Slot options reject past date (400)', pastSlots.status === 400, `Got ${pastSlots.status}`);
+
+    // 8.3 Slot options are owner-only (vet gets 403)
+    const vetUser = await login('vet1@example.com', 'VetPass123!');
+    const vetSlots = await fetch(`${BASE}/api/appointments/${raId}/slots?date=${targetDate}`, { headers: authed(vetUser.cookie) });
+    check('Vet cannot fetch slot options (403)', vetSlots.status === 403, `Got ${vetSlots.status}`);
+
+    // 8.4 Slot options are private to the appointment's owner
+    if (cookie2) {
+      const badSlotsOwner = await fetch(`${BASE}/api/appointments/${raId}/slots?date=${targetDate}`, { headers: authed(cookie2) });
+      check('Cross-owner slot options FORBIDDEN (403)', badSlotsOwner.status === 403, `Got ${badSlotsOwner.status}`);
+    }
+
+    // 8.5 Slot grid: 9 AM - 5 PM hourly options, all available on the fresh date
+    const slotsRes = await fetch(`${BASE}/api/appointments/${raId}/slots?date=${targetDate}`, { headers: authed(owner.cookie) });
+    const slotsData = await slotsRes.json();
+    check('Slot options returned for a future date', slotsRes.status === 200 && slotsData.success === true, JSON.stringify(slotsData).slice(0, 200));
+    check('Slot grid is exactly 8 hourly options (9 AM - 4 PM)', slotsData.slots?.length === 8, `Got ${slotsData.slots?.length}`);
+    check('All slots available when the vet is free', slotsData.slots?.every(s => s.available === true));
+
+    // 8.6 Booked slots are excluded: book a second appointment at 11 AM on the same date
+    const busySlot = slotsData.slots?.find(s => s.hour === 11);
+    const ra2Res = await fetch(`${BASE}/api/appointments`, {
+      method: 'POST',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({
+        petId,
+        vetId: vet.id,
+        clinicId,
+        dateTime: busySlot.iso,
+        reason: 'Slot busy-marker test',
+      }),
+    });
+    const ra2Data = await ra2Res.json();
+    const slotsRes2 = await fetch(`${BASE}/api/appointments/${raId}/slots?date=${targetDate}`, { headers: authed(owner.cookie) });
+    const slotsData2 = await slotsRes2.json();
+    const busyNow = slotsData2.slots?.find(s => s.hour === 11);
+    const freeStill = slotsData2.slots?.find(s => s.hour === 14);
+    check('Booked slot is marked unavailable in options', ra2Data.success === true && busyNow?.available === false, JSON.stringify(busyNow));
+    check('Other slots remain available', freeStill?.available === true, JSON.stringify(freeStill));
+
+    // 8.7 Past-date reschedule rejected
     const pastRs = await fetch(`${BASE}/api/appointments/${raId}`, {
       method: 'PUT',
       headers: authed(owner.cookie),
@@ -209,7 +261,18 @@ async function main() {
     });
     check('Past-date reschedule is rejected (400)', pastRs.status === 400, `Got ${pastRs.status}`);
 
-    // 8.2 Same-time reschedule rejected
+    // 8.8 Off-hours reschedule rejected (working hours 9 AM - 5 PM Karachi)
+    const offHours = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    offHours.setUTCHours(20, 0, 0, 0); // 1 AM Karachi next day
+    const offRs = await fetch(`${BASE}/api/appointments/${raId}`, {
+      method: 'PUT',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: offHours.toISOString() }),
+    });
+    const offData = await offRs.json();
+    check('Off-hours reschedule rejected with OUTSIDE_WORKING_HOURS (400)', offRs.status === 400 && offData.error?.code === 'OUTSIDE_WORKING_HOURS', JSON.stringify(offData).slice(0, 200));
+
+    // 8.9 Same-time reschedule rejected
     const sameRs = await fetch(`${BASE}/api/appointments/${raId}`, {
       method: 'PUT',
       headers: authed(owner.cookie),
@@ -217,39 +280,37 @@ async function main() {
     });
     check('Same-time reschedule is rejected (400)', sameRs.status === 400, `Got ${sameRs.status}`);
 
-    // 8.3 Valid reschedule: new future time, status resets to REQUESTED
-    const newTime = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
-    newTime.setUTCHours(9, 0, 0, 0);
+    // 8.10 Valid reschedule to a slot from the options: status resets to REQUESTED
+    const pickSlot = freeStill; // 2 PM Karachi
     const okRs = await fetch(`${BASE}/api/appointments/${raId}`, {
       method: 'PUT',
       headers: authed(owner.cookie),
-      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: newTime.toISOString() }),
+      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: pickSlot.iso }),
     });
     const okData = await okRs.json();
-    check('Owner can reschedule to a future time', okRs.status === 200 && okData.success === true, JSON.stringify(okData).slice(0, 200));
+    check('Owner can reschedule to a slot option', okRs.status === 200 && okData.success === true, JSON.stringify(okData).slice(0, 200));
     check('Reschedule resets status to REQUESTED', okData.appointment?.status === 'REQUESTED');
-    check('Reschedule updates dateTime', okData.appointment && new Date(okData.appointment.dateTime).getTime() === newTime.getTime());
+    check('Reschedule updates dateTime to the chosen slot', okData.appointment && new Date(okData.appointment.dateTime).getTime() === new Date(pickSlot.iso).getTime());
 
-    // 8.4 Vet cannot reschedule (owner-only action)
-    const vetUser = await login('vet1@example.com', 'VetPass123!');
+    // 8.11 Vet cannot reschedule (owner-only action)
     const vetRs = await fetch(`${BASE}/api/appointments/${raId}`, {
       method: 'PUT',
       headers: authed(vetUser.cookie),
-      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: newTime.toISOString() }),
+      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: pickSlot.iso }),
     });
     check('Vet cannot reschedule (403)', vetRs.status === 403, `Got ${vetRs.status}`);
 
-    // 8.5 Cross-owner reschedule forbidden
+    // 8.12 Cross-owner reschedule forbidden
     if (cookie2) {
       const badRs = await fetch(`${BASE}/api/appointments/${raId}`, {
         method: 'PUT',
         headers: authed(cookie2),
-        body: JSON.stringify({ action: 'RESCHEDULE', dateTime: newTime.toISOString() }),
+        body: JSON.stringify({ action: 'RESCHEDULE', dateTime: pickSlot.iso }),
       });
       check('Cross-owner reschedule is FORBIDDEN (403)', badRs.status === 403, `Got ${badRs.status}`);
     }
 
-    // 8.6 Cancelled appointment cannot be rescheduled
+    // 8.13 Cancelled appointment cannot be rescheduled
     await fetch(`${BASE}/api/appointments/${raId}`, {
       method: 'PUT',
       headers: authed(owner.cookie),
@@ -258,9 +319,18 @@ async function main() {
     const cancelledRs = await fetch(`${BASE}/api/appointments/${raId}`, {
       method: 'PUT',
       headers: authed(owner.cookie),
-      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: newTime.toISOString() }),
+      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: pickSlot.iso }),
     });
     check('Cancelled appointment cannot be rescheduled (400)', cancelledRs.status === 400, `Got ${cancelledRs.status}`);
+
+    // Clean up the busy-marker appointment
+    if (ra2Data.success) {
+      await fetch(`${BASE}/api/appointments/${ra2Data.appointment.id}`, {
+        method: 'PUT',
+        headers: authed(owner.cookie),
+        body: JSON.stringify({ status: 'CANCELLED' }),
+      });
+    }
   } else {
     check('Reschedule test booking created', false, JSON.stringify(reschedBookData).slice(0, 200));
   }

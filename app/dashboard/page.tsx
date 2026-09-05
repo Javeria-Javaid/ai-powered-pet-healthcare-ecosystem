@@ -31,10 +31,14 @@ export default function Dashboard() {
   const [isBookingAppt, setIsBookingAppt] = useState(false);
   const [bookingForm, setBookingForm] = useState({ petId: '', vetId: '', clinicId: '', dateTime: '', reason: '' });
 
-  // Reschedule states
+  // Reschedule states — slot options come from the server (check_slots availability rules)
   const [isReschedulingAppt, setIsReschedulingAppt] = useState(false);
   const [rescheduleTarget, setRescheduleTarget] = useState<any>(null);
-  const [rescheduleDateTime, setRescheduleDateTime] = useState('');
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleSlots, setRescheduleSlots] = useState<any[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState('');
+  const [selectedSlotIso, setSelectedSlotIso] = useState('');
   
   // AI Health Assistant States
   const [aiPetId, setAiPetId] = useState('');
@@ -308,30 +312,58 @@ export default function Dashboard() {
     }
   }
 
-  // Reschedule operations
-  function toLocalInputValue(iso: string) {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return '';
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  // Reschedule operations — options come from /api/appointments/[id]/slots, which applies the
+  // same availability rules as the AI assistant's check_slots (working hours 9 AM - 5 PM,
+  // vet's REQUESTED/CONFIRMED bookings and past times excluded)
+  function toKarachiDateString(d: Date) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(d);
+  }
+
+  async function fetchRescheduleSlots(apptId: string, date: string) {
+    setSlotsLoading(true);
+    setSlotsError('');
+    setRescheduleSlots([]);
+    setSelectedSlotIso('');
+    try {
+      const res = await fetch(`/api/appointments/${apptId}/slots?date=${date}`);
+      const data = await res.json();
+      if (data.success) {
+        setRescheduleSlots(data.slots || []);
+      } else {
+        setSlotsError(data.error?.message || 'Failed to load available slots.');
+      }
+    } catch (err) {
+      setSlotsError('Connection error loading slots.');
+    } finally {
+      setSlotsLoading(false);
+    }
   }
 
   function handleOpenReschedule(appt: any) {
     setRescheduleTarget(appt);
-    setRescheduleDateTime(toLocalInputValue(appt.dateTime));
     setModalError('');
+    const karachiDate = toKarachiDateString(new Date(appt.dateTime));
+    setRescheduleDate(karachiDate);
     setIsReschedulingAppt(true);
+    fetchRescheduleSlots(appt.id, karachiDate);
+  }
+
+  function handleRescheduleDateChange(date: string) {
+    setRescheduleDate(date);
+    if (date && rescheduleTarget) {
+      fetchRescheduleSlots(rescheduleTarget.id, date);
+    }
   }
 
   async function handleRescheduleAppt(e: React.FormEvent) {
     e.preventDefault();
-    if (!rescheduleTarget) return;
+    if (!rescheduleTarget || !selectedSlotIso) return;
     setModalError('');
     try {
       const res = await fetch(`/api/appointments/${rescheduleTarget.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'RESCHEDULE', dateTime: rescheduleDateTime }),
+        body: JSON.stringify({ action: 'RESCHEDULE', dateTime: selectedSlotIso }),
       });
       const data = await res.json();
       if (data.success) {
@@ -1476,21 +1508,62 @@ export default function Dashboard() {
 
             <form onSubmit={handleRescheduleAppt} className="flex flex-col gap-3">
               <div>
-                <label className="text-xs font-semibold text-zinc-500 block mb-1">New Date &amp; Time</label>
-                <input autoComplete='off' 
-                  type="datetime-local" required
-                  value={rescheduleDateTime} onChange={e => setRescheduleDateTime(e.target.value)}
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">New Date</label>
+                <input
+                  type="date" required
+                  min={toKarachiDateString(new Date())}
+                  value={rescheduleDate}
+                  onChange={e => handleRescheduleDateChange(e.target.value)}
                   className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
                 />
               </div>
 
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">
+                  Available Times <span className="font-normal text-zinc-400">(9 AM - 5 PM)</span>
+                </label>
+                {slotsLoading && <p className="text-xs text-zinc-400 py-2">Checking available slots...</p>}
+                {!slotsLoading && slotsError && <p className="text-xs text-red-600 py-2">{slotsError}</p>}
+                {!slotsLoading && !slotsError && rescheduleSlots.length === 0 && (
+                  <p className="text-xs text-zinc-400 py-2">No slots available on this date — pick another date.</p>
+                )}
+                {!slotsLoading && rescheduleSlots.length > 0 && (
+                  <div className="grid grid-cols-4 gap-2">
+                    {rescheduleSlots.map((slot: any) => {
+                      const isCurrent = rescheduleTarget && new Date(slot.iso).getTime() === new Date(rescheduleTarget.dateTime).getTime();
+                      const isSelected = selectedSlotIso === slot.iso;
+                      const disabled = !slot.available || isCurrent;
+                      return (
+                        <button
+                          key={slot.iso}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => setSelectedSlotIso(slot.iso)}
+                          title={isCurrent ? 'Current appointment time' : !slot.available ? 'Not available' : ''}
+                          className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
+                            isSelected
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : disabled
+                              ? 'border-zinc-100 bg-zinc-50 text-zinc-300 cursor-not-allowed'
+                              : 'border-zinc-200 text-zinc-700 hover:bg-blue-50 hover:border-blue-200'
+                          }`}
+                        >
+                          {slot.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <p className="text-[10px] text-zinc-400 leading-relaxed">
-                The appointment will be reset to Pending Confirmation and the vet will need to approve the new time.
+                Slots follow clinic working hours (9 AM - 5 PM). The appointment will be reset to Pending Confirmation and the vet will need to approve the new time.
               </p>
 
               <button
                 type="submit"
-                className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+                disabled={!selectedSlotIso}
+                className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:bg-zinc-300 disabled:cursor-not-allowed"
               >
                 Confirm Reschedule
               </button>

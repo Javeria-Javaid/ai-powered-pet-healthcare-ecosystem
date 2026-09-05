@@ -43,7 +43,7 @@ async function main() {
       method: 'POST',
       headers: authed(owner.cookie),
       body: JSON.stringify({
-        name: 'Löna 🐕 TestPet',
+        name: 'Löna 🐕',
         species: 'Dog',
         breed: 'Test Breed',
         gender: 'Female',
@@ -59,7 +59,8 @@ async function main() {
       const getRes = await fetch(`${BASE}/api/pets`, { headers: authed(owner.cookie) });
       const getData = await getRes.json();
       const saved = getData.pets.find(p => p.id === petId);
-      check('Emoji name round-trips correctly from DB', saved && saved.name === 'Löna 🐕 TestPet', `Got: ${saved?.name}`);
+      console.log(`  Inserted: "Löna 🐕" | Read back from DB: "${saved?.name}" | Char codes: ${[...(saved?.name || '')].map(c => c.codePointAt(0).toString(16)).join(' ')}`);
+      check('Emoji name round-trips correctly from DB', saved && saved.name === 'Löna 🐕', `Got: ${saved?.name}`);
     }
   } catch (e) {
     check('Pet with emoji name saves without encoding error', false, e.message);
@@ -182,7 +183,89 @@ async function main() {
     console.log('  SKIP: could not establish intruder session');
   }
 
-  console.log('=== TEST 7: Cleanup - delete test pet ===');
+  console.log('=== TEST 8: Reschedule appointment (owner-only, resets to REQUESTED) ===');
+  const reschedBase = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000);
+  reschedBase.setUTCHours(12, 0, 0, 0);
+  const reschedBookRes = await fetch(`${BASE}/api/appointments`, {
+    method: 'POST',
+    headers: authed(owner.cookie),
+    body: JSON.stringify({
+      petId,
+      vetId: vet.id,
+      clinicId,
+      dateTime: reschedBase.toISOString(),
+      reason: 'Reschedule test',
+    }),
+  });
+  const reschedBookData = await reschedBookRes.json();
+  if (reschedBookData.success) {
+    const raId = reschedBookData.appointment.id;
+
+    // 8.1 Past-date reschedule rejected
+    const pastRs = await fetch(`${BASE}/api/appointments/${raId}`, {
+      method: 'PUT',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: yesterday }),
+    });
+    check('Past-date reschedule is rejected (400)', pastRs.status === 400, `Got ${pastRs.status}`);
+
+    // 8.2 Same-time reschedule rejected
+    const sameRs = await fetch(`${BASE}/api/appointments/${raId}`, {
+      method: 'PUT',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: reschedBase.toISOString() }),
+    });
+    check('Same-time reschedule is rejected (400)', sameRs.status === 400, `Got ${sameRs.status}`);
+
+    // 8.3 Valid reschedule: new future time, status resets to REQUESTED
+    const newTime = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    newTime.setUTCHours(9, 0, 0, 0);
+    const okRs = await fetch(`${BASE}/api/appointments/${raId}`, {
+      method: 'PUT',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: newTime.toISOString() }),
+    });
+    const okData = await okRs.json();
+    check('Owner can reschedule to a future time', okRs.status === 200 && okData.success === true, JSON.stringify(okData).slice(0, 200));
+    check('Reschedule resets status to REQUESTED', okData.appointment?.status === 'REQUESTED');
+    check('Reschedule updates dateTime', okData.appointment && new Date(okData.appointment.dateTime).getTime() === newTime.getTime());
+
+    // 8.4 Vet cannot reschedule (owner-only action)
+    const vetUser = await login('vet1@example.com', 'VetPass123!');
+    const vetRs = await fetch(`${BASE}/api/appointments/${raId}`, {
+      method: 'PUT',
+      headers: authed(vetUser.cookie),
+      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: newTime.toISOString() }),
+    });
+    check('Vet cannot reschedule (403)', vetRs.status === 403, `Got ${vetRs.status}`);
+
+    // 8.5 Cross-owner reschedule forbidden
+    if (cookie2) {
+      const badRs = await fetch(`${BASE}/api/appointments/${raId}`, {
+        method: 'PUT',
+        headers: authed(cookie2),
+        body: JSON.stringify({ action: 'RESCHEDULE', dateTime: newTime.toISOString() }),
+      });
+      check('Cross-owner reschedule is FORBIDDEN (403)', badRs.status === 403, `Got ${badRs.status}`);
+    }
+
+    // 8.6 Cancelled appointment cannot be rescheduled
+    await fetch(`${BASE}/api/appointments/${raId}`, {
+      method: 'PUT',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ status: 'CANCELLED' }),
+    });
+    const cancelledRs = await fetch(`${BASE}/api/appointments/${raId}`, {
+      method: 'PUT',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ action: 'RESCHEDULE', dateTime: newTime.toISOString() }),
+    });
+    check('Cancelled appointment cannot be rescheduled (400)', cancelledRs.status === 400, `Got ${cancelledRs.status}`);
+  } else {
+    check('Reschedule test booking created', false, JSON.stringify(reschedBookData).slice(0, 200));
+  }
+
+  console.log('=== TEST 9: Cleanup - delete test pet ===');
   if (petId) {
     const delRes = await fetch(`${BASE}/api/pets/${petId}`, { method: 'DELETE', headers: authed(owner.cookie) });
     check('Test pet deleted', delRes.ok);

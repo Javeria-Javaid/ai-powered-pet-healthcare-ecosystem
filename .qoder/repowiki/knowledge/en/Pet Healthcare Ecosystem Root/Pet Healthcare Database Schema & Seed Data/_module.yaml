@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: database_schema
-title: Prisma Database Schema & Seed Data
+title: Pet Healthcare Database Schema & Seed Data
 scope:
     - prisma/
 source_files: []

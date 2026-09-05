@@ -1,0 +1,1 @@
+Seed script requires a `DATABASE_URL` env var and automatically decodes Prisma Cloud's `prisma+postgres://` connection strings by base64-decoding the `api_key` query parameter to obtain the underlying `databaseUrl`; run via Node after installing dependencies in this directory.

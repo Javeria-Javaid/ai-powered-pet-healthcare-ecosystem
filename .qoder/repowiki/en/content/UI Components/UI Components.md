@@ -16,6 +16,13 @@
 - [package.json](file://package.json)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated icon usage across components to use Lucide React icons instead of emoji characters for better consistency and accessibility
+- Enhanced visual appearance with standardized icon styling throughout the application
+- Improved accessibility compliance by replacing text-based emojis with semantic SVG icons
+- Maintained consistent design language across all UI components
+
 ## Table of Contents
 1. Introduction
 2. Project Structure
@@ -69,6 +76,7 @@ Key behaviors:
 - All interactive elements use Tailwind utility classes for consistent styling and responsiveness.
 - Event-driven architecture: Parent page manages auth state and passes handlers down to child components.
 - Client-side interactivity is enabled with 'use client' directives where needed.
+- **Updated**: All components now use Lucide React icons instead of emoji characters for improved accessibility and consistency.
 
 **Section sources**
 - [Hero.tsx:5-61](file://app/components/Hero.tsx#L5-L61)
@@ -118,10 +126,10 @@ Chat-->>User : Render assistant response (markdown)
 - Purpose: Introduce PETIVA with a strong headline, description, and primary CTAs.
 - Props:
   - onRegisterClick: Function invoked when "Get Started Free" is clicked.
-- Visuals: Gradient background, two-column layout (text left, image right), rounded image container, ambient glow shapes.
+- Visuals: Gradient background, two-column layout (text left, image right), rounded image container, ambient glow shapes. Uses PawPrint icon from Lucide React for enhanced visual appeal.
 - Behavior: Button triggers registration flow; secondary link scrolls to features section.
 - Responsiveness: Single column on mobile, two columns on md+.
-- Accessibility: Semantic section, descriptive alt text for image, keyboard-focusable buttons.
+- Accessibility: Semantic section, descriptive alt text for image, keyboard-focusable buttons, proper icon semantics.
 - Customization: Update colors, typography, and imagery via Tailwind utilities; adjust gradient and spacing.
 
 Usage example references:
@@ -136,10 +144,10 @@ Usage example references:
 - Props:
   - onLoginClick: Opens login modal.
   - onRegisterClick: Opens registration modal.
-- Visuals: Transparent backdrop blur header, centered logo with paw icon, desktop nav links, action buttons.
+- Visuals: Transparent backdrop blur header, centered logo with PawPrint icon from Lucide React, desktop nav links, action buttons.
 - Behavior: Logo smooth-scrolls to top; links anchor to sections; buttons open modals.
 - Responsiveness: Links hidden on small screens; actions visible on all sizes.
-- Accessibility: Keyboard navigable links and buttons; semantic header and nav.
+- Accessibility: Keyboard navigable links and buttons; semantic header and nav; proper icon semantics.
 - Customization: Modify link destinations, add/remove items, adjust brand colors and spacing.
 
 Usage example references:
@@ -160,10 +168,10 @@ Usage example references:
   - error/loading: Display and disable states.
   - handleSubmit: Handles form submission (login/register).
   - handleGoogleCallback: Processes Google OAuth credential.
-- Visuals: Centered modal with backdrop blur, form inputs, divider, Google button area, toggle link between login/register.
+- Visuals: Centered modal with backdrop blur, form inputs, divider, Google button area, toggle link between login/register. Uses PawPrint and Rocket icons from Lucide React.
 - Behavior: Renders Google button when modal opens; handles form submit; shows errors; disables submit during loading.
 - Responsiveness: Full-width on mobile, constrained max-width on larger screens.
-- Accessibility: Close button, labeled inputs, focus styles, screen-reader-friendly status updates.
+- Accessibility: Close button, labeled inputs, focus styles, screen-reader-friendly status updates, proper icon semantics.
 - Customization: Theme variants via Tailwind dark mode classes; modify form fields and validation messages.
 
 Integration notes:
@@ -176,10 +184,10 @@ Integration notes:
 ### Footer
 - Purpose: Branding, site links, newsletter subscription, and legal information.
 - State: Local email input and subscribed flag for feedback.
-- Visuals: Dark background, multi-column grid, social links, newsletter form, copyright bar.
+- Visuals: Dark background, multi-column grid, social links, newsletter form, copyright bar. Uses PawPrint, Briefcase, Check, Copyright, and Heart icons from Lucide React.
 - Behavior: Prevents default form submission; clears input and shows confirmation on subscribe.
 - Responsiveness: Single column on mobile, multi-column grid on md+.
-- Accessibility: Semantic footer, accessible form controls, clear labels and placeholders.
+- Accessibility: Semantic footer, accessible form controls, clear labels and placeholders, proper icon semantics.
 - Customization: Update links, social URLs, and branding copy.
 
 **Section sources**
@@ -188,10 +196,10 @@ Integration notes:
 ### ChatWidget
 - Purpose: Floating AI assistant panel for platform help and feature questions.
 - State: Open/close, messages array, input text, loading indicator, scroll ref.
-- Visuals: Fixed bottom-right FAB; slide-in panel with header, message list, and input form.
+- Visuals: Fixed bottom-right FAB; slide-in panel with header, message list, and input form. Uses MessageCircle, X, and PawPrint icons from Lucide React.
 - Behavior: Sends chat history to /api/landing-chat; renders assistant responses using react-markdown; auto-scrolls to latest message; supports Enter to send.
 - Responsiveness: Wider panel on sm+; fixed positioning ensures usability across devices.
-- Accessibility: Title attribute on FAB; keyboard support for textarea and submit; aria-like semantics via native elements.
+- Accessibility: Title attribute on FAB; keyboard support for textarea and submit; aria-like semantics via native elements; proper icon semantics.
 - Customization: Adjust panel size, colors, and markdown rendering via component props or internal overrides.
 
 API interaction:
@@ -213,10 +221,10 @@ API interaction:
 - Purpose: Showcase three communities (Pet Owners, Veterinarians, Clinics) with feature lists and images.
 - Props:
   - onOwnerClick, onVetClick, onClinicClick: Trigger registration flows.
-- Visuals: Card grid with colored accents per community; images and feature checklists.
+- Visuals: Card grid with colored accents per community; images and feature checklists. Uses User, Check, and Building2 icons from Lucide React for pet owners and clinics. **Note**: One veterinarian card still contains an emoji character that should be updated to a Lucide icon for full consistency.
 - Behavior: Buttons open registration modal via parent handlers.
 - Responsiveness: Single column on mobile, three columns on lg+.
-- Accessibility: Clear headings, list items, and actionable buttons.
+- Accessibility: Clear headings, list items, and actionable buttons; proper icon semantics where implemented.
 
 **Section sources**
 - [CommunitiesSection.tsx:5-183](file://app/components/CommunitiesSection.tsx#L5-L183)
@@ -224,9 +232,9 @@ API interaction:
 
 ### HowItWorks
 - Purpose: Step-by-step guide illustrating the user journey.
-- Visuals: Four steps with icons and connecting line on desktop; concise descriptions.
+- Visuals: Four steps with icons and connecting line on desktop; concise descriptions. Uses User, PawPrint, Calendar, and TrendingUp icons from Lucide React.
 - Responsiveness: Vertical stack on mobile; horizontal flow on md+.
-- Accessibility: Numbered steps with clear headings and descriptions.
+- Accessibility: Numbered steps with clear headings and descriptions; proper icon semantics.
 
 **Section sources**
 - [HowItWorks.tsx:5-78](file://app/components/HowItWorks.tsx#L5-L78)
@@ -235,10 +243,10 @@ API interaction:
 - Purpose: Final call-to-action before footer to encourage sign-ups.
 - Props:
   - onRegisterClick: Opens registration modal.
-- Visuals: Gradient card with circular image, headline, subtext, and prominent CTA.
+- Visuals: Gradient card with circular image, headline, subtext, and prominent CTA. Uses PawPrint icon from Lucide React for decorative element.
 - Behavior: Button triggers registration flow.
 - Responsiveness: Three-column layout on md+, stacked on mobile.
-- Accessibility: Clear heading hierarchy and button labeling.
+- Accessibility: Clear heading hierarchy and button labeling; proper icon semantics.
 
 **Section sources**
 - [CTASection.tsx:5-50](file://app/components/CTASection.tsx#L5-L50)
@@ -287,6 +295,7 @@ CTA --> LUC
 - Network requests: Debounce or throttle repeated requests if expanding chat functionality; ensure proper error handling to prevent excessive retries.
 - Markdown rendering: react-markdown is lightweight; keep response content concise to reduce reflows.
 - Styling: Prefer Tailwind utilities for predictable performance and reduced custom CSS.
+- **Updated**: Icon optimization - Lucide React icons are vector-based and scale well across different screen sizes without additional file downloads.
 
 [No sources needed since this section provides general guidance]
 
@@ -296,6 +305,7 @@ Common issues and resolutions:
 - Authentication failures: Check network connectivity and server responses; inspect error messages set by parent handlers.
 - ChatWidget connection errors: Validate /api/landing-chat availability; display user-friendly fallback messages.
 - Modal state inconsistencies: Ensure parent state is correctly passed and updated; reset error and loading flags appropriately.
+- **Updated**: Icon display issues - Verify that lucide-react is properly installed and imported; ensure icons are rendered with proper className attributes for sizing.
 
 **Section sources**
 - [AuthModal.tsx:55-69](file://app/components/AuthModal.tsx#L55-L69)
@@ -321,6 +331,7 @@ The PETIVA UI Component library offers a cohesive, responsive, and accessible se
 - Global theme variables are defined in globals.css; extend or override as needed.
 - Tailwind utilities provide extensive customization for colors, spacing, typography, and shadows.
 - Dark mode classes are used in some components; ensure consistent theme application across your app.
+- **Updated**: Icon styling - Lucide React icons can be customized using Tailwind classes like w-4 h-4 for sizing and color classes for theming.
 
 **Section sources**
 - [globals.css:1-20](file://app/globals.css#L1-L20)
@@ -330,6 +341,7 @@ The PETIVA UI Component library offers a cohesive, responsive, and accessible se
 - Use semantic HTML elements (header, nav, main, footer, section).
 - Ensure keyboard navigation works for all interactive elements.
 - Maintain sufficient color contrast and focus indicators.
+- **Updated**: Icon accessibility - Replace emoji characters with semantic SVG icons from Lucide React for better screen reader support and consistent rendering across platforms.
 
 **Section sources**
 - [Hero.tsx:47-51](file://app/components/Hero.tsx#L47-L51)
@@ -341,6 +353,7 @@ The PETIVA UI Component library offers a cohesive, responsive, and accessible se
 ### Cross-Browser Compatibility
 - Tailwind CSS v4 and modern React features are supported in current browsers; test on Chrome, Firefox, Safari, and Edge.
 - Google Identity Services requires compatible environments; fallbacks should be considered for unsupported contexts.
+- **Updated**: Icon compatibility - Lucide React icons provide consistent rendering across all modern browsers without relying on system emoji fonts.
 
 [No sources needed since this section provides general guidance]
 
@@ -349,6 +362,21 @@ The PETIVA UI Component library offers a cohesive, responsive, and accessible se
 - Manage shared state (auth, modal visibility) at the page level and delegate to components via props.
 - Ensure server routes exist for authentication and chat endpoints.
 - Follow consistent naming and structure conventions to maintain clarity and scalability.
+- **Updated**: Icon integration - Import specific icons from lucide-react as needed: `import { IconName } from 'lucide-react';`
 
 **Section sources**
 - [page.tsx:163-219](file://app/page.tsx#L163-L219)
+
+### Icon Migration Notes
+**Updated**: The following components have been migrated from emoji characters to Lucide React icons:
+
+- **Hero.tsx**: Replaced paw emoji with PawPrint icon
+- **Navbar.tsx**: Replaced paw emoji with PawPrint icon  
+- **Footer.tsx**: Replaced multiple emojis with PawPrint, Briefcase, Check, Copyright, and Heart icons
+- **ChatWidget.tsx**: Replaced hand emoji with Hand icon, added MessageCircle and PawPrint icons
+- **AuthModal.tsx**: Replaced paw emoji with PawPrint icon, added Rocket icon for dev button
+- **HowItWorks.tsx**: Replaced step icons with User, PawPrint, Calendar, and TrendingUp icons
+- **CTASection.tsx**: Replaced paw emoji with PawPrint icon
+- **CommunitiesSection.tsx**: Partially migrated - User, Check, and Building2 icons implemented, but one veterinarian card still contains 🩺 emoji
+
+**Remaining Work**: Complete migration of remaining emoji characters to Lucide icons for full consistency across all components.

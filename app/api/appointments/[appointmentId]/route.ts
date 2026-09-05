@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { AppointmentStatus } from '@prisma/client';
 
-// PUT /api/appointments/[appointmentId] - Confirm, reject, or cancel appointments
+// PUT /api/appointments/[appointmentId] - Confirm, reject, cancel, or reschedule appointments
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ appointmentId: string }> }
@@ -11,7 +11,118 @@ export async function PUT(
   try {
     const user = await requireAuth();
     const { appointmentId } = await params;
-    const { status } = await req.json();
+    const body = await req.json();
+    const { status, action, dateTime } = body;
+
+    // Reschedule: owner moves an upcoming appointment to a new future time; status resets to REQUESTED
+    if (action === 'RESCHEDULE') {
+      if (user.role !== 'PET_OWNER') {
+        return NextResponse.json(
+          { success: false, error: { code: 'FORBIDDEN', message: 'Only pet owners can reschedule appointments.' } },
+          { status: 403 }
+        );
+      }
+
+      const appt = await prisma.appointment.findUnique({
+        where: { id: appointmentId },
+      });
+
+      if (!appt) {
+        return NextResponse.json(
+          { success: false, error: { code: 'NOT_FOUND', message: 'Appointment not found.' } },
+          { status: 404 }
+        );
+      }
+
+      if (appt.ownerId !== user.id) {
+        return NextResponse.json(
+          { success: false, error: { code: 'FORBIDDEN', message: 'You can only reschedule your own appointments.' } },
+          { status: 403 }
+        );
+      }
+
+      if (appt.status !== 'REQUESTED' && appt.status !== 'CONFIRMED') {
+        return NextResponse.json(
+          { success: false, error: { code: 'BAD_REQUEST', message: 'Only pending or confirmed appointments can be rescheduled.' } },
+          { status: 400 }
+        );
+      }
+
+      if (!dateTime) {
+        return NextResponse.json(
+          { success: false, error: { code: 'BAD_REQUEST', message: 'Missing the new appointment date and time.' } },
+          { status: 400 }
+        );
+      }
+
+      const newDate = new Date(dateTime);
+
+      if (isNaN(newDate.getTime())) {
+        return NextResponse.json(
+          { success: false, error: { code: 'BAD_REQUEST', message: 'Invalid date and time for reschedule.' } },
+          { status: 400 }
+        );
+      }
+
+      if (newDate <= new Date()) {
+        return NextResponse.json(
+          { success: false, error: { code: 'BAD_REQUEST', message: 'That date has already passed — please choose a future date.' } },
+          { status: 400 }
+        );
+      }
+
+      if (newDate.getTime() === appt.dateTime.getTime()) {
+        return NextResponse.json(
+          { success: false, error: { code: 'BAD_REQUEST', message: 'The new time is the same as the current appointment time.' } },
+          { status: 400 }
+        );
+      }
+
+      // Same double-booking rule as booking creation
+      const conflict = await prisma.appointment.findFirst({
+        where: {
+          id: { not: appt.id },
+          vetId: appt.vetId,
+          dateTime: newDate,
+          status: { in: ['REQUESTED', 'CONFIRMED'] },
+        },
+      });
+
+      if (conflict) {
+        return NextResponse.json(
+          { success: false, error: { code: 'CONFLICT', message: 'The veterinarian is already booked for this time slot.' } },
+          { status: 409 }
+        );
+      }
+
+      const rescheduledAppt = await prisma.appointment.update({
+        where: { id: appointmentId },
+        data: { dateTime: newDate, status: 'REQUESTED' },
+        include: {
+          pet: true,
+          vet: { include: { user: { select: { firstName: true, lastName: true } } } },
+          clinic: true,
+        },
+      });
+
+      // Write an Audit Log for tracking security privileges
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: 'APPOINTMENT_RESCHEDULED',
+          entity: 'Appointment',
+          entityId: appointmentId,
+          payload: JSON.stringify({
+            previousDateTime: appt.dateTime.toISOString(),
+            newDateTime: newDate.toISOString(),
+            previousStatus: appt.status,
+            newStatus: 'REQUESTED',
+          }),
+        },
+      });
+
+      return NextResponse.json({ success: true, appointment: rescheduledAppt });
+    }
 
     if (!status || !Object.values(AppointmentStatus).includes(status)) {
       return NextResponse.json(

@@ -1,0 +1,1 @@
+No project-level build/run commands live here; the app is served through the standard Next.js dev/build scripts from the repository root.

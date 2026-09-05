@@ -30,6 +30,11 @@ export default function Dashboard() {
   
   const [isBookingAppt, setIsBookingAppt] = useState(false);
   const [bookingForm, setBookingForm] = useState({ petId: '', vetId: '', clinicId: '', dateTime: '', reason: '' });
+
+  // Reschedule states
+  const [isReschedulingAppt, setIsReschedulingAppt] = useState(false);
+  const [rescheduleTarget, setRescheduleTarget] = useState<any>(null);
+  const [rescheduleDateTime, setRescheduleDateTime] = useState('');
   
   // AI Health Assistant States
   const [aiPetId, setAiPetId] = useState('');
@@ -300,6 +305,48 @@ export default function Dashboard() {
       }
     } catch (err) {
       setError('Connection error cancelling appointment.');
+    }
+  }
+
+  // Reschedule operations
+  function toLocalInputValue(iso: string) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function handleOpenReschedule(appt: any) {
+    setRescheduleTarget(appt);
+    setRescheduleDateTime(toLocalInputValue(appt.dateTime));
+    setModalError('');
+    setIsReschedulingAppt(true);
+  }
+
+  async function handleRescheduleAppt(e: React.FormEvent) {
+    e.preventDefault();
+    if (!rescheduleTarget) return;
+    setModalError('');
+    try {
+      const res = await fetch(`/api/appointments/${rescheduleTarget.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'RESCHEDULE', dateTime: rescheduleDateTime }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsReschedulingAppt(false);
+        setSuccessMsg('Appointment rescheduled — the vet will need to confirm the new time.');
+        const listRes = await fetch('/api/appointments');
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          setAppointments(listData.appointments);
+        }
+      } else {
+        setModalError(data.error?.message || 'Failed to reschedule appointment.');
+      }
+    } catch (err) {
+      setModalError('Connection error rescheduling appointment.');
     }
   }
 
@@ -703,6 +750,12 @@ export default function Dashboard() {
 
                     <div className="flex gap-2 justify-end mt-2 pt-2 border-t border-zinc-100">
                       <button
+                        onClick={() => handleOpenReschedule(upcomingAppt)}
+                        className="rounded-lg border border-blue-200 px-4 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition"
+                      >
+                        Reschedule
+                      </button>
+                      <button
                         onClick={() => handleCancelAppt(upcomingAppt.id)}
                         className="rounded-lg border border-red-200 px-4 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
                       >
@@ -906,7 +959,13 @@ export default function Dashboard() {
                   )}
                   {(appt.status === 'REQUESTED' || appt.status === 'CONFIRMED') && new Date(appt.dateTime) > new Date() && (
 
-                    <div className="mt-4 pt-3 border-t border-zinc-100 text-right">
+                    <div className="mt-4 pt-3 border-t border-zinc-100 flex justify-end gap-2">
+                      <button
+                        onClick={() => handleOpenReschedule(appt)}
+                        className="rounded-lg border border-blue-200 px-4 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition"
+                      >
+                        Reschedule
+                      </button>
                       <button
                         onClick={() => handleCancelAppt(appt.id)}
                         className="rounded-lg border border-red-200 px-4 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
@@ -1386,6 +1445,54 @@ export default function Dashboard() {
                 className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
               >
                 Submit Booking
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4.4 RESCHEDULE APPOINTMENT DIALOG OVERLAY */}
+      {isReschedulingAppt && rescheduleTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl   flex flex-col gap-4 text-zinc-900 ">
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="text-lg font-bold">Reschedule Appointment</h3>
+              <button onClick={() => setIsReschedulingAppt(false)} className="text-zinc-400 hover:text-zinc-600 font-bold"><X className="inline w-4 h-4" /></button>
+            </div>
+
+            {modalError && (
+              <div className="mb-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-600 relative">
+                <button type="button" onClick={() => setModalError('')} className="absolute top-1 right-2 text-red-500 hover:text-red-700 font-bold"><X className="w-3 h-3" /></button>
+                {modalError}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3.5 text-xs text-zinc-600 flex flex-col gap-1">
+              <p><strong>Pet:</strong> {rescheduleTarget.pet?.name}</p>
+              <p><strong>Vet:</strong> Dr. {rescheduleTarget.vet?.user?.firstName} {rescheduleTarget.vet?.user?.lastName}</p>
+              <p><strong>Clinic:</strong> {rescheduleTarget.clinic?.name}</p>
+              <p><strong>Current time:</strong> {new Date(rescheduleTarget.dateTime).toLocaleString()}</p>
+            </div>
+
+            <form onSubmit={handleRescheduleAppt} className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">New Date &amp; Time</label>
+                <input autoComplete='off' 
+                  type="datetime-local" required
+                  value={rescheduleDateTime} onChange={e => setRescheduleDateTime(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+
+              <p className="text-[10px] text-zinc-400 leading-relaxed">
+                The appointment will be reset to Pending Confirmation and the vet will need to approve the new time.
+              </p>
+
+              <button
+                type="submit"
+                className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Confirm Reschedule
               </button>
             </form>
           </div>

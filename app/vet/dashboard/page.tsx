@@ -576,7 +576,7 @@ export default function VetDashboard() {
                   <div>
                     <span className="text-xs text-zinc-400">{new Date(appt.dateTime).toLocaleString()}</span>
                     <h4 className="font-bold text-sm mt-1">Pet Patient: {appt.pet?.name}</h4>
-                    <p className="text-xs text-zinc-500 mt-0.5">Owner: {appt.pet?.owner?.firstName} {appt.pet?.owner?.lastName}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Owner: {appt.owner?.firstName} {appt.owner?.lastName}</p>
                     <p className="text-xs text-zinc-400 mt-1">Reason: {appt.reason}</p>
                   </div>
                   <div className="flex gap-2">

@@ -3,7 +3,7 @@ schema_version: 1
 locale: en-US
 branch: master
 nodes_managed: true
-exported_at: "2026-09-03T15:47:13Z"
+exported_at: "2026-09-05T13:00:02Z"
 modules:
     "":
         dir_name: Pet Healthcare Ecosystem Root
@@ -36,8 +36,8 @@ modules:
         depends_on: []
         related_to: []
     app_frontend:
-        dir_name: Petiva Next.js App Frontend
-        title: Petiva Next.js App Frontend
+        dir_name: PETIVA Next.js App Frontend
+        title: PETIVA Next.js App Frontend
         scope:
             - app/
         source_files: []
@@ -57,8 +57,8 @@ modules:
         depends_on: []
         related_to: []
     database_schema:
-        dir_name: Prisma Database Schema & Seed Data
-        title: Prisma Database Schema & Seed Data
+        dir_name: Pet Healthcare Database Schema & Seed Data
+        title: Pet Healthcare Database Schema & Seed Data
         scope:
             - prisma/
         source_files: []

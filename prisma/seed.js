@@ -245,16 +245,19 @@ async function main() {
   });
 
   // Requested future appointment for Vet 2 -> Milo (Unconfirmed/Pending status)
+  // Date is relative (one week out) so re-seeding always produces a live upcoming appointment
+  const upcomingApptDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  upcomingApptDate.setUTCHours(10, 0, 0, 0); // 10 AM UTC = 3 PM Karachi (within working hours)
   const appt2 = await prisma.appointment.upsert({
     where: { id: 'appt-2-requested-placeholder' },
-    update: {},
+    update: { dateTime: upcomingApptDate },
     create: {
       id: 'appt-2-requested-placeholder',
       petId: pet2.id,
       ownerId: ownerUser.id,
       vetId: vet2Profile.id,
       clinicId: clinicA.id,
-      dateTime: new Date('2026-09-01T14:00:00.000Z'),
+      dateTime: upcomingApptDate,
       reason: 'Minor skin irritation',
       status: 'REQUESTED',
     },

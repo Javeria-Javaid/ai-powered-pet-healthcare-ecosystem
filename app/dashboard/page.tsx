@@ -1,5 +1,5 @@
 'use client';
-import { PawPrint, Home, Users, Calendar, User, Settings, LogOut, Hand, Clock, Building2, Clipboard, RefreshCw, Bot, Shield, Pill, MessageCircle, X, Stethoscope } from 'lucide-react';
+import { PawPrint, Home, Users, Calendar, User, Settings, LogOut, Hand, Clock, Building2, Clipboard, RefreshCw, Bot, Shield, Pill, MessageCircle, X, Stethoscope, Bell } from 'lucide-react';
 
 
 import { useState, useEffect, useRef } from 'react';
@@ -39,7 +39,17 @@ export default function Dashboard() {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState('');
   const [selectedSlotIso, setSelectedSlotIso] = useState('');
-  
+
+  // Vaccination & Medication tracking states
+  const [vaccinations, setVaccinations] = useState<any[]>([]);
+  const [medications, setMedications] = useState<any[]>([]);
+  const [reminders, setReminders] = useState<any[]>([]);
+
+  const [isAddingVaccination, setIsAddingVaccination] = useState(false);
+  const [vaccinationForm, setVaccinationForm] = useState({ vaccineName: '', administeredDate: '', dueDate: '', vetName: '' });
+  const [isAddingMedication, setIsAddingMedication] = useState(false);
+  const [medicationForm, setMedicationForm] = useState({ medicationName: '', dosage: '', frequency: '', startDate: '', endDate: '' });
+
   // AI Health Assistant States
   const [aiPetId, setAiPetId] = useState('');
   const [aiConversationId, setAiConversationId] = useState('');
@@ -76,11 +86,21 @@ export default function Dashboard() {
           if (petsData.pets.length > 0) {
             setAiPetId(petsData.pets[0].id);
             setSelectedPet(petsData.pets[0]);
-            // Fetch initial pet's timeline
+            // Fetch initial pet's timeline, vaccinations, and medications
             const timeRes = await fetch(`/api/pets/${petsData.pets[0].id}/timeline`);
             if (timeRes.ok) {
               const timeData = await timeRes.json();
               setTimeline(timeData.timeline);
+            }
+            const vacRes = await fetch(`/api/pets/${petsData.pets[0].id}/vaccinations`);
+            if (vacRes.ok) {
+              const vacData = await vacRes.json();
+              setVaccinations(vacData.vaccinations);
+            }
+            const medRes = await fetch(`/api/pets/${petsData.pets[0].id}/medications`);
+            if (medRes.ok) {
+              const medData = await medRes.json();
+              setMedications(medData.medications);
             }
           }
         }
@@ -89,6 +109,12 @@ export default function Dashboard() {
         if (apptsRes.ok) {
           const apptsData = await apptsRes.json();
           setAppointments(apptsData.appointments);
+        }
+
+        const remindersRes = await fetch('/api/reminders');
+        if (remindersRes.ok) {
+          const remindersData = await remindersRes.json();
+          setReminders(remindersData.reminders);
         }
 
         const discoveryRes = await fetch('/api/vet/discovery');
@@ -157,14 +183,140 @@ export default function Dashboard() {
     setSelectedPet(pet);
     setAiPetId(pet.id);
     setTimeline([]);
+    setVaccinations([]);
+    setMedications([]);
     try {
       const res = await fetch(`/api/pets/${pet.id}/timeline`);
       if (res.ok) {
         const data = await res.json();
         setTimeline(data.timeline);
       }
+      const vacRes = await fetch(`/api/pets/${pet.id}/vaccinations`);
+      if (vacRes.ok) {
+        const vacData = await vacRes.json();
+        setVaccinations(vacData.vaccinations);
+      }
+      const medRes = await fetch(`/api/pets/${pet.id}/medications`);
+      if (medRes.ok) {
+        const medData = await medRes.json();
+        setMedications(medData.medications);
+      }
     } catch (err) {
       console.error('Failed to load timeline:', err);
+    }
+  }
+
+  // Due-date helpers shared by vaccination, medication, and reminder displays
+  function daysUntil(d: string | Date) {
+    return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+  }
+  function dueLabel(d: string | Date) {
+    const days = daysUntil(d);
+    if (days < 0) return `Overdue by ${-days} day${-days === 1 ? '' : 's'}`;
+    if (days === 0) return 'Due today';
+    return `Due in ${days} day${days === 1 ? '' : 's'}`;
+  }
+  function dueBadgeClass(d: string | Date) {
+    const days = daysUntil(d);
+    if (days < 0) return 'bg-red-100 text-red-700';
+    if (days <= 14) return 'bg-orange-100 text-orange-700';
+    return 'bg-green-100 text-green-700';
+  }
+
+  async function refreshReminders() {
+    try {
+      const res = await fetch('/api/reminders');
+      if (res.ok) {
+        const data = await res.json();
+        setReminders(data.reminders);
+      }
+    } catch (err) {
+      console.error('Failed to refresh reminders:', err);
+    }
+  }
+
+  async function refreshTimeline() {
+    if (!selectedPet) return;
+    try {
+      const res = await fetch(`/api/pets/${selectedPet.id}/timeline`);
+      if (res.ok) {
+        const data = await res.json();
+        setTimeline(data.timeline);
+      }
+    } catch (err) {
+      console.error('Failed to refresh timeline:', err);
+    }
+  }
+
+  // Vaccination & Medication tracking operations
+  async function handleAddVaccination(e: React.FormEvent) {
+    e.preventDefault();
+    setModalError('');
+    try {
+      const res = await fetch(`/api/pets/${selectedPet.id}/vaccinations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vaccineName: vaccinationForm.vaccineName,
+          administeredDate: vaccinationForm.administeredDate,
+          dueDate: vaccinationForm.dueDate || null,
+          vetName: vaccinationForm.vetName || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setVaccinations([data.vaccination, ...vaccinations]);
+        setIsAddingVaccination(false);
+        setVaccinationForm({ vaccineName: '', administeredDate: '', dueDate: '', vetName: '' });
+        refreshReminders();
+        refreshTimeline();
+      } else {
+        setModalError(data.error?.message || 'Failed to add vaccination.');
+      }
+    } catch (err) {
+      setModalError('Connection error adding vaccination.');
+    }
+  }
+
+  async function handleAddMedication(e: React.FormEvent) {
+    e.preventDefault();
+    setModalError('');
+    try {
+      const res = await fetch(`/api/pets/${selectedPet.id}/medications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          medicationName: medicationForm.medicationName,
+          dosage: medicationForm.dosage,
+          frequency: medicationForm.frequency,
+          startDate: medicationForm.startDate,
+          endDate: medicationForm.endDate || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMedications([data.medication, ...medications]);
+        setIsAddingMedication(false);
+        setMedicationForm({ medicationName: '', dosage: '', frequency: '', startDate: '', endDate: '' });
+        refreshReminders();
+        refreshTimeline();
+      } else {
+        setModalError(data.error?.message || 'Failed to add medication.');
+      }
+    } catch (err) {
+      setModalError('Connection error adding medication.');
+    }
+  }
+
+  async function handleClearReminder(reminderId: string) {
+    try {
+      const res = await fetch(`/api/reminders/${reminderId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setReminders(reminders.filter(r => r.id !== reminderId));
+      }
+    } catch (err) {
+      console.error('Failed to clear reminder:', err);
     }
   }
 
@@ -767,7 +919,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex-grow">
                         <div className="flex justify-between items-start">
-                          <h4 className="font-bold text-sm text-zinc-900 ">{upcomingAppt.pet.name} – General Checkup</h4>
+                          <h4 className="font-bold text-sm text-zinc-900 ">{upcomingAppt.pet.name} – {upcomingAppt.reason}</h4>
                           <span className={`text-[9px] px-2 py-0.5 rounded font-bold ${upcomingAppt.status === 'REQUESTED' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
                             {upcomingAppt.status === 'REQUESTED' ? 'Pending Confirmation' : upcomingAppt.status}
                           </span>
@@ -822,18 +974,16 @@ export default function Dashboard() {
                   <p className="text-xs text-zinc-400 italic py-6">No health activities recorded.</p>
                 ) : (
                   <div className="flex flex-col gap-4 relative pl-4 border-l-2 border-dashed border-zinc-150 ml-2">
-                    {timeline.filter((item: any) => item.createdAt && !isNaN(new Date(item.createdAt).getTime()) && (item.symptoms || item.treatmentPlan || item.diagnosis)).slice(0, 3).map((item: any, idx: number) => (
+                    {timeline.filter((item: any) => item.date && !isNaN(new Date(item.date).getTime())).slice(0, 3).map((item: any, idx: number) => (
                       <div key={idx} className="relative flex gap-3 items-start mb-2">
                         {/* Dot indicator */}
                         <div className="absolute -left-[23px] top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-blue-600 shadow-sm flex items-center justify-center">
                           <span className="text-[7px] text-white">●</span>
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-zinc-800 ">
-                            {item.symptoms ? `Diagnosis: ${item.diagnosis || 'Health update'}` : `Vaccination logged`}
-                          </p>
+                          <p className="text-xs font-bold text-zinc-800 ">{item.title}</p>
                           <p className="text-[10px] text-zinc-400 mt-0.5">
-                            {item.symptoms ? `Symptoms: ${item.symptoms}` : (item.treatmentPlan ? `Treatment: ${item.treatmentPlan}` : '')}{(item.symptoms || item.treatmentPlan) && item.createdAt ? ' • ' : ''}{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}
+                            {item.description ? `${item.description} • ` : ''}{new Date(item.date).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
@@ -841,6 +991,38 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Health Reminders */}
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm  ">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-base font-bold text-zinc-900  flex items-center gap-2"><Bell className="w-4 h-4 text-blue-600" /> Health Reminders</h3>
+              </div>
+              {reminders.length === 0 ? (
+                <p className="text-xs text-zinc-400 italic py-4">No pending reminders. Record a vaccination or medication with a due or end date to create one.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {reminders.map((r: any) => (
+                    <div key={r.id} className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3.5 flex justify-between items-center gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-zinc-800 truncate">{r.title}</p>
+                        <p className="text-[10px] text-zinc-400 mt-1 flex items-center gap-1">
+                          <Clock className="inline w-3 h-3" /> {new Date(r.dueAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[9px] px-2 py-0.5 rounded font-bold ${dueBadgeClass(r.dueAt)}`}>{dueLabel(r.dueAt)}</span>
+                        <button
+                          onClick={() => handleClearReminder(r.id)}
+                          className="rounded-lg border border-zinc-200 px-3 py-1 text-[10px] font-semibold text-zinc-600 hover:bg-zinc-50 transition"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Quick Actions */}
@@ -902,7 +1084,15 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {pets.map(pet => (
-                <div key={pet.id} className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm   flex flex-col gap-4">
+                <div
+                  key={pet.id}
+                  onClick={() => handleSelectPet(pet)}
+                  className={`rounded-2xl border p-6 shadow-sm   flex flex-col gap-4 cursor-pointer transition ${
+                    selectedPet?.id === pet.id
+                      ? 'border-blue-600 bg-blue-50/40'
+                      : 'border-zinc-200 bg-white  hover:bg-zinc-50'
+                  }`}
+                >
                   <div className="flex justify-between items-start">
                     <div>
                       <h4 className="text-lg font-bold">{pet.name} {pet.gender === 'Female' ? '' : ''}</h4>
@@ -937,6 +1127,85 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+
+            {/* Health Tracking for the selected pet */}
+            {selectedPet && (
+              <div className="flex flex-col gap-4">
+                <h4 className="text-base font-bold text-zinc-900 ">Health Tracking — {selectedPet.name}</h4>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Vaccinations */}
+                  <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm  ">
+                    <div className="flex justify-between items-center mb-4">
+                      <h5 className="text-sm font-bold text-zinc-900  flex items-center gap-2"><Shield className="w-4 h-4 text-green-600" /> Vaccinations</h5>
+                      <button
+                        onClick={() => {
+                          setVaccinationForm({ vaccineName: '', administeredDate: '', dueDate: '', vetName: '' });
+                          setIsAddingVaccination(true);
+                        }}
+                        className="rounded-full border border-blue-600 px-4 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 transition"
+                      >
+                        + Add Vaccination
+                      </button>
+                    </div>
+                    {vaccinations.length === 0 ? (
+                      <p className="text-xs text-zinc-400 italic py-4">No vaccinations recorded yet.</p>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {vaccinations.map((v: any) => (
+                          <div key={v.id} className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3.5 flex justify-between items-start gap-3">
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-zinc-800">{v.vaccineName}</p>
+                              <p className="text-[10px] text-zinc-400 mt-0.5">
+                                Given {new Date(v.administeredDate).toLocaleDateString()}{v.vetName ? ` • ${v.vetName}` : ''}
+                              </p>
+                            </div>
+                            {v.dueDate && (
+                              <span className={`text-[9px] px-2 py-0.5 rounded font-bold shrink-0 ${dueBadgeClass(v.dueDate)}`}>{dueLabel(v.dueDate)}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Medications */}
+                  <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm  ">
+                    <div className="flex justify-between items-center mb-4">
+                      <h5 className="text-sm font-bold text-zinc-900  flex items-center gap-2"><Pill className="w-4 h-4 text-orange-600" /> Medications</h5>
+                      <button
+                        onClick={() => {
+                          setMedicationForm({ medicationName: '', dosage: '', frequency: '', startDate: '', endDate: '' });
+                          setIsAddingMedication(true);
+                        }}
+                        className="rounded-full border border-blue-600 px-4 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 transition"
+                      >
+                        + Add Medication
+                      </button>
+                    </div>
+                    {medications.length === 0 ? (
+                      <p className="text-xs text-zinc-400 italic py-4">No medications recorded yet.</p>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {medications.map((m: any) => (
+                          <div key={m.id} className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3.5 flex justify-between items-start gap-3">
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-zinc-800">{m.medicationName}</p>
+                              <p className="text-[10px] text-zinc-400 mt-0.5">{m.dosage} • {m.frequency}</p>
+                              <p className="text-[10px] text-zinc-400 mt-0.5">
+                                Started {new Date(m.startDate).toLocaleDateString()}{m.endDate ? ` • until ${new Date(m.endDate).toLocaleDateString()}` : ''}
+                              </p>
+                            </div>
+                            <span className={`text-[9px] px-2 py-0.5 rounded font-bold shrink-0 ${m.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-600'}`}>
+                              {m.status === 'ACTIVE' ? 'Active' : m.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1566,6 +1835,144 @@ export default function Dashboard() {
                 className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:bg-zinc-300 disabled:cursor-not-allowed"
               >
                 Confirm Reschedule
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4.5 ADD VACCINATION DIALOG OVERLAY */}
+      {isAddingVaccination && selectedPet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl   flex flex-col gap-4 text-zinc-900 ">
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="text-lg font-bold">Add Vaccination — {selectedPet.name}</h3>
+              <button onClick={() => setIsAddingVaccination(false)} className="text-zinc-400 hover:text-zinc-600 font-bold"><X className="inline w-4 h-4" /></button>
+            </div>
+
+            {modalError && (
+              <div className="mb-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-600 relative">
+                <button type="button" onClick={() => setModalError('')} className="absolute top-1 right-2 text-red-500 hover:text-red-700 font-bold"><X className="w-3 h-3" /></button>
+                {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddVaccination} className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Vaccine Name</label>
+                <input autoComplete='off'
+                  type="text" required placeholder="Rabies, DHPP, FVRCP..."
+                  value={vaccinationForm.vaccineName} onChange={e => setVaccinationForm({ ...vaccinationForm, vaccineName: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Date Administered</label>
+                <input
+                  type="date" required max={new Date().toISOString().split('T')[0]}
+                  value={vaccinationForm.administeredDate} onChange={e => setVaccinationForm({ ...vaccinationForm, administeredDate: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Next Dose / Booster Due <span className="font-normal text-zinc-400">(optional)</span></label>
+                <input
+                  type="date"
+                  value={vaccinationForm.dueDate} onChange={e => setVaccinationForm({ ...vaccinationForm, dueDate: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Administering Vet <span className="font-normal text-zinc-400">(optional)</span></label>
+                <input autoComplete='off'
+                  type="text" placeholder="Dr. ..."
+                  value={vaccinationForm.vetName} onChange={e => setVaccinationForm({ ...vaccinationForm, vetName: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+
+              <p className="text-[10px] text-zinc-400 leading-relaxed">A health reminder is created automatically when a booster due date is set.</p>
+
+              <button
+                type="submit"
+                className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Save Vaccination
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4.6 ADD MEDICATION DIALOG OVERLAY */}
+      {isAddingMedication && selectedPet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl   flex flex-col gap-4 text-zinc-900 ">
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="text-lg font-bold">Add Medication — {selectedPet.name}</h3>
+              <button onClick={() => setIsAddingMedication(false)} className="text-zinc-400 hover:text-zinc-600 font-bold"><X className="inline w-4 h-4" /></button>
+            </div>
+
+            {modalError && (
+              <div className="mb-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-600 relative">
+                <button type="button" onClick={() => setModalError('')} className="absolute top-1 right-2 text-red-500 hover:text-red-700 font-bold"><X className="w-3 h-3" /></button>
+                {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddMedication} className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 block mb-1">Medication Name</label>
+                <input autoComplete='off'
+                  type="text" required placeholder="Amoxicillin, Metacam..."
+                  value={medicationForm.medicationName} onChange={e => setMedicationForm({ ...medicationForm, medicationName: e.target.value })}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Dosage</label>
+                  <input autoComplete='off'
+                    type="text" required placeholder="50 mg"
+                    value={medicationForm.dosage} onChange={e => setMedicationForm({ ...medicationForm, dosage: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Frequency</label>
+                  <input autoComplete='off'
+                    type="text" required placeholder="Twice daily"
+                    value={medicationForm.frequency} onChange={e => setMedicationForm({ ...medicationForm, frequency: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Start Date</label>
+                  <input
+                    type="date" required
+                    value={medicationForm.startDate} onChange={e => setMedicationForm({ ...medicationForm, startDate: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">End Date <span className="font-normal text-zinc-400">(optional)</span></label>
+                  <input
+                    type="date"
+                    value={medicationForm.endDate} onChange={e => setMedicationForm({ ...medicationForm, endDate: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <p className="text-[10px] text-zinc-400 leading-relaxed">A health reminder is created automatically when an end date is set.</p>
+
+              <button
+                type="submit"
+                className="mt-3 w-full rounded-full bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Save Medication
               </button>
             </form>
           </div>

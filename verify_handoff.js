@@ -183,6 +183,136 @@ async function main() {
     console.log('  SKIP: could not establish intruder session');
   }
 
+  console.log('=== TEST 7: Vaccination & Medication tracking + reminders ===');
+  if (petId) {
+    const vacBase = {
+      petId,
+      vaccineName: 'Rabies',
+      administeredDate: new Date(Date.now() - 10 * 86400000).toISOString().split('T')[0],
+      dueDate: new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0],
+      vetName: 'Dr. Alice Smith',
+    };
+    const vacRes = await fetch(`${BASE}/api/pets/${petId}/vaccinations`, {
+      method: 'POST',
+      headers: authed(owner.cookie),
+      body: JSON.stringify(vacBase),
+    });
+    const vacData = await vacRes.json();
+    check('Vaccination record is created', vacRes.status === 201 && vacData.success === true, JSON.stringify(vacData).slice(0, 200));
+    check('Vaccination reminder is auto-created when due date set', !!vacData.reminder && vacData.reminder.title === `Vaccination due: Rabies (Löna 🐕)`, JSON.stringify(vacData.reminder).slice(0, 200));
+    const vacReminderId = vacData.reminder?.id;
+
+    const vacNoName = await fetch(`${BASE}/api/pets/${petId}/vaccinations`, {
+      method: 'POST',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ ...vacBase, vaccineName: '' }),
+    });
+    check('Vaccination without a name is rejected', vacNoName.status === 400);
+
+    const vacFuture = await fetch(`${BASE}/api/pets/${petId}/vaccinations`, {
+      method: 'POST',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ ...vacBase, administeredDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0] }),
+    });
+    check('Vaccination administered in the future is rejected', vacFuture.status === 400);
+
+    const vacBadDue = await fetch(`${BASE}/api/pets/${petId}/vaccinations`, {
+      method: 'POST',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ ...vacBase, dueDate: vacBase.administeredDate }),
+    });
+    check('Vaccination due date on/before administered date is rejected', vacBadDue.status === 400);
+
+    const vacListRes = await fetch(`${BASE}/api/pets/${petId}/vaccinations`, { headers: authed(owner.cookie) });
+    const vacList = await vacListRes.json();
+    check('Vaccination list contains the new record', vacListRes.status === 200 && vacList.vaccinations?.some(v => v.id === vacData.vaccination?.id));
+
+    // Authorization: cross-owner access to another user's pet records
+    if (cookie2) {
+      const intruderGet = await fetch(`${BASE}/api/pets/${petId}/vaccinations`, { headers: authed(cookie2) });
+      check('Cross-owner vaccination list is FORBIDDEN (403)', intruderGet.status === 403, `Got ${intruderGet.status}`);
+      const intruderPost = await fetch(`${BASE}/api/pets/${petId}/vaccinations`, {
+        method: 'POST',
+        headers: authed(cookie2),
+        body: JSON.stringify(vacBase),
+      });
+      check('Cross-owner vaccination create is FORBIDDEN (403)', intruderPost.status === 403, `Got ${intruderPost.status}`);
+    }
+
+    // Veterinarians cannot record health tracking entries on a pet they do not own
+    const vetUser = await login('vet1@example.com', 'VetPass123!').catch(() => null);
+    if (vetUser) {
+      const vetPost = await fetch(`${BASE}/api/pets/${petId}/vaccinations`, {
+        method: 'POST',
+        headers: authed(vetUser.cookie),
+        body: JSON.stringify(vacBase),
+      });
+      check('Vet creating a vaccination is FORBIDDEN (403)', vetPost.status === 403, `Got ${vetPost.status}`);
+    }
+
+    // Medications
+    const medBase = {
+      petId,
+      medicationName: 'Amoxicillin',
+      dosage: '50 mg',
+      frequency: 'Twice daily',
+      startDate: new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+    };
+    const medRes = await fetch(`${BASE}/api/pets/${petId}/medications`, {
+      method: 'POST',
+      headers: authed(owner.cookie),
+      body: JSON.stringify(medBase),
+    });
+    const medData = await medRes.json();
+    check('Medication record is created as ACTIVE', medRes.status === 201 && medData.success === true && medData.medication?.status === 'ACTIVE', JSON.stringify(medData).slice(0, 200));
+    check('Medication reminder is auto-created when end date set', !!medData.reminder && medData.reminder.title === `Medication ends: Amoxicillin (Löna 🐕)`, JSON.stringify(medData.reminder).slice(0, 200));
+    const medReminderId = medData.reminder?.id;
+
+    const medNoDosage = await fetch(`${BASE}/api/pets/${petId}/medications`, {
+      method: 'POST',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ ...medBase, dosage: '' }),
+    });
+    check('Medication without dosage is rejected', medNoDosage.status === 400);
+
+    const medBadEnd = await fetch(`${BASE}/api/pets/${petId}/medications`, {
+      method: 'POST',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ ...medBase, endDate: new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0] }),
+    });
+    check('Medication end date before start date is rejected', medBadEnd.status === 400);
+
+    const medListRes = await fetch(`${BASE}/api/pets/${petId}/medications`, { headers: authed(owner.cookie) });
+    const medList = await medListRes.json();
+    check('Medication list contains the new record', medListRes.status === 200 && medList.medications?.some(m => m.id === medData.medication?.id));
+
+    // Reminders list + clear
+    const remRes = await fetch(`${BASE}/api/reminders`, { headers: authed(owner.cookie) });
+    const remData = await remRes.json();
+    check('Reminders list contains both auto-created reminders', remRes.status === 200 && remData.reminders?.some(r => r.id === vacReminderId) && remData.reminders?.some(r => r.id === medReminderId), JSON.stringify(remData.reminders?.map(r => r.title)).slice(0, 300));
+
+    if (cookie2 && vacReminderId) {
+      const badClear = await fetch(`${BASE}/api/reminders/${vacReminderId}`, { method: 'DELETE', headers: authed(cookie2) });
+      check('Cross-user reminder clear is FORBIDDEN (403)', badClear.status === 403, `Got ${badClear.status}`);
+    }
+
+    if (vacReminderId) {
+      const clearRes = await fetch(`${BASE}/api/reminders/${vacReminderId}`, { method: 'DELETE', headers: authed(owner.cookie) });
+      check('Owner clears their own reminder', clearRes.status === 200 && (await clearRes.json()).success === true);
+    }
+    if (medReminderId) {
+      const clearRes2 = await fetch(`${BASE}/api/reminders/${medReminderId}`, { method: 'DELETE', headers: authed(owner.cookie) });
+      check('Medication reminder cleared (test cleanup)', clearRes2.status === 200);
+    }
+
+    const remAfter = await fetch(`${BASE}/api/reminders`, { headers: authed(owner.cookie) });
+    const remAfterData = await remAfter.json();
+    check('Cleared reminders disappear from the list', !(remAfterData.reminders || []).some(r => r.id === vacReminderId || r.id === medReminderId));
+  } else {
+    console.log('  SKIP: no pet available for tracking tests');
+  }
+
   console.log('=== TEST 8: Reschedule (slot options, owner-only, resets to REQUESTED) ===');
   const karachiFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' });
   const reschedBase = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000);

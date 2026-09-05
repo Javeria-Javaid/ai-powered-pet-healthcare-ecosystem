@@ -3,11 +3,12 @@
 <cite>
 **Referenced Files in This Document**
 - [app/dashboard/page.tsx](file://app/dashboard/page.tsx)
+- [app/api/appointments/[appointmentId]/slots/route.ts](file://app/api/appointments/[appointmentId]/slots/route.ts)
+- [app/api/appointments/[appointmentId]/route.ts](file://app/api/appointments/[appointmentId]/route.ts)
 - [app/components/ChatWidget.tsx](file://app/components/ChatWidget.tsx)
 - [app/components/VetChatInterface.tsx](file://app/components/VetChatInterface.tsx)
 - [app/api/pets/route.ts](file://app/api/pets/route.ts)
 - [app/api/appointments/route.ts](file://app/api/appointments/route.ts)
-- [app/api/appointments/[appointmentId]/route.ts](file://app/api/appointments/[appointmentId]/route.ts)
 - [app/api/profile/route.ts](file://app/api/profile/route.ts)
 - [app/api/ai/chat/route.ts](file://app/api/ai/chat/route.ts)
 - [app/api/pets/[petId]/timeline/route.ts](file://app/api/pets/[petId]/timeline/route.ts)
@@ -23,11 +24,11 @@
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive documentation for the new appointment rescheduling functionality including modal dialog, datetime-local input field, and state management
-- Updated appointment workflow documentation to include reschedule operations alongside existing cancel functionality
-- Enhanced dashboard interface documentation with new reschedule buttons and modal implementation
-- Updated API documentation to cover the new reschedule endpoint with validation and business logic
-- Added detailed coverage of reschedule state management and user interaction patterns
+- Updated appointment rescheduling workflow to use slot-based selection instead of datetime picker
+- Added comprehensive documentation for the new dynamic time slot selection grid interface
+- Enhanced rescheduling API documentation with new slots endpoint and improved validation
+- Updated user interaction patterns to reflect the new slot-based rescheduling experience
+- Added detailed coverage of server-side slot availability calculation and conflict detection
 
 ## Table of Contents
 1. Introduction
@@ -43,7 +44,7 @@
 ## Introduction
 This document explains the Pet Owner Dashboard in PETIVA, focusing on the main dashboard interface, pet portfolio management, appointment booking and rescheduling workflow, integrated AI health assistant chat, profile management, responsive design patterns, data fetching strategies, state management, and error handling. It is designed for both technical and non-technical readers to understand how the dashboard works end-to-end.
 
-**Updated** The dashboard now features a complete appointment rescheduling system with an intuitive modal interface, allowing users to easily modify their appointment times while maintaining proper validation and workflow integration.
+**Updated** The dashboard now features an enhanced appointment rescheduling system with a slot-based workflow, replacing the previous datetime picker with an intuitive dynamic time slot selection grid that ensures optimal scheduling within clinic working hours while preventing conflicts.
 
 ## Project Structure
 The dashboard is implemented as a Next.js client component with server-side API routes for data operations. The root layout sets global styles and metadata. Tailwind CSS provides responsive utilities across devices.
@@ -59,6 +60,7 @@ subgraph "API Routes"
 PETS["Pets API<br/>app/api/pets/route.ts"]
 APPTS["Appointments API<br/>app/api/appointments/route.ts"]
 APPT_UPDATE["Appointment Update API<br/>app/api/appointments/[appointmentId]/route.ts"]
+APPT_SLOTS["Appointment Slots API<br/>app/api/appointments/[appointmentId]/slots/route.ts"]
 PROFILE["Profile API<br/>app/api/profile/route.ts"]
 TIMELINE["Pet Timeline API<br/>app/api/pets/[petId]/timeline/route.ts"]
 AICHAT["AI Chat API<br/>app/api/ai/chat/route.ts"]
@@ -74,6 +76,7 @@ end
 D --> PETS
 D --> APPTS
 D --> APPT_UPDATE
+D --> APPT_SLOTS
 D --> PROFILE
 D --> TIMELINE
 D --> AICHAT
@@ -87,6 +90,7 @@ VC --> READ_API
 PETS --> AUTH
 APPTS --> AUTH
 APPT_UPDATE --> AUTH
+APPT_SLOTS --> AUTH
 PROFILE --> AUTH
 TIMELINE --> AUTH
 AICHAT --> AUTH
@@ -97,6 +101,7 @@ READ_API --> AUTH
 PETS --> SCHEMA
 APPTS --> SCHEMA
 APPT_UPDATE --> SCHEMA
+APPT_SLOTS --> SCHEMA
 PROFILE --> SCHEMA
 TIMELINE --> SCHEMA
 AICHAT --> SCHEMA
@@ -107,12 +112,13 @@ READ_API --> SCHEMA
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:1-1505](file://app/dashboard/page.tsx#L1-L1505)
+- [app/dashboard/page.tsx:1-1578](file://app/dashboard/page.tsx#L1-L1578)
 - [app/components/ChatWidget.tsx:1-149](file://app/components/ChatWidget.tsx#L1-L149)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
 - [app/api/appointments/route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
-- [app/api/appointments/[appointmentId]/route.ts:1-230](file://app/api/appointments/[appointmentId]/route.ts#L1-L230)
+- [app/api/appointments/[appointmentId]/route.ts:1-242](file://app/api/appointments/[appointmentId]/route.ts#L1-L242)
+- [app/api/appointments/[appointmentId]/slots/route.ts:1-117](file://app/api/appointments/[appointmentId]/slots/route.ts#L1-L117)
 - [app/api/profile/route.ts:1-82](file://app/api/profile/route.ts#L1-L82)
 - [app/api/pets/[petId]/timeline/route.ts:1-149](file://app/api/pets/[petId]/timeline/route.ts#L1-L149)
 - [app/api/ai/chat/route.ts:1-120](file://app/api/ai/chat/route.ts#L1-L120)
@@ -142,12 +148,13 @@ Key responsibilities:
 - Schema models ensure consistent data structure and relationships including new conversation and message entities.
 
 **Section sources**
-- [app/dashboard/page.tsx:1-1505](file://app/dashboard/page.tsx#L1-L1505)
+- [app/dashboard/page.tsx:1-1578](file://app/dashboard/page.tsx#L1-L1578)
 - [app/components/ChatWidget.tsx:1-149](file://app/components/ChatWidget.tsx#L1-L149)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
 - [app/api/appointments/route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
-- [app/api/appointments/[appointmentId]/route.ts:1-230](file://app/api/appointments/[appointmentId]/route.ts#L1-L230)
+- [app/api/appointments/[appointmentId]/route.ts:1-242](file://app/api/appointments/[appointmentId]/route.ts#L1-L242)
+- [app/api/appointments/[appointmentId]/slots/route.ts:1-117](file://app/api/appointments/[appointmentId]/slots/route.ts#L1-L117)
 - [app/api/profile/route.ts:1-82](file://app/api/profile/route.ts#L1-L82)
 - [app/api/pets/[petId]/timeline/route.ts:1-149](file://app/api/pets/[petId]/timeline/route.ts#L1-L149)
 - [app/api/ai/chat/route.ts:1-120](file://app/api/ai/chat/route.ts#L1-L120)
@@ -159,8 +166,8 @@ Key responsibilities:
 - [prisma/schema.prisma:1-312](file://prisma/schema.prisma#L1-L312)
 
 ## Architecture Overview
-The dashboard follows a client-server architecture with enhanced conversation management and appointment rescheduling capabilities:
-- Client: React components manage UI state and call APIs for multiple tabs including the new chat functionality and rescheduling features.
+The dashboard follows a client-server architecture with enhanced conversation management and slot-based appointment rescheduling capabilities:
+- Client: React components manage UI state and call APIs for multiple tabs including the new chat functionality and slot-based rescheduling features.
 - Server: Next.js API routes handle authentication, authorization, database queries, business logic, and real-time conversation updates.
 - Data: Prisma ORM interacts with PostgreSQL based on the defined schema including new conversation and message tables.
 - AI: Streaming NDJSON responses enable real-time status updates and results during AI processing.
@@ -174,9 +181,14 @@ participant VC as "VetChatInterface"
 participant AC as "AI Chat API"
 participant CC as "Conversation API"
 participant AR as "Appointment Reschedule API"
+participant AS as "Slots API"
 participant DB as "Database"
 U->>D : Navigate to Appointments Tab
 U->>D : Click Reschedule Button
+D->>AS : GET /api/appointments/{id}/slots?date=YYYY-MM-DD
+AS->>DB : Check vet availability & working hours
+AS-->>D : Return available time slots
+U->>D : Select time slot from grid
 D->>AR : PUT /api/appointments/{id} with RESCHEDULE action
 AR->>DB : Validate appointment status & check conflicts
 AR-->>D : Return updated appointment
@@ -201,6 +213,7 @@ VC-->>U : Display Real-time Messages
 - [app/dashboard/page.tsx:319-351](file://app/dashboard/page.tsx#L319-L351)
 - [app/components/VetChatInterface.tsx:56-85](file://app/components/VetChatInterface.tsx#L56-L85)
 - [app/api/appointments/[appointmentId]/route.ts:17-125](file://app/api/appointments/[appointmentId]/route.ts#L17-L125)
+- [app/api/appointments/[appointmentId]/slots/route.ts:15-103](file://app/api/appointments/[appointmentId]/slots/route.ts#L15-L103)
 - [app/api/appointments/[appointmentId]/conversation/route.ts:10-55](file://app/api/appointments/[appointmentId]/conversation/route.ts#L10-L55)
 - [app/api/conversations/[conversationId]/messages/route.ts:5-38](file://app/api/conversations/[conversationId]/messages/route.ts#L5-L38)
 - [app/api/conversations/[conversationId]/read/route.ts:5-41](file://app/api/conversations/[conversationId]/read/route.ts#L5-L41)
@@ -218,7 +231,7 @@ Data flow:
 - On mount, fetch profile, pets, appointments, discovery vets, and initial timeline for the first pet.
 - Selecting a pet updates selected pet, AI pet context, and reloads timeline.
 - Booking an appointment posts to API and refreshes list.
-- **New**: Reschedule functionality integrated into appointment cards with modal dialog interface.
+- **Updated**: Reschedule functionality now uses slot-based selection with dynamic time slot grid instead of datetime picker.
 
 Error handling:
 - Displays error or success banners for user feedback.
@@ -261,9 +274,9 @@ Complexity:
 **Section sources**
 - [app/api/pets/[petId]/timeline/route.ts:1-149](file://app/api/pets/[petId]/timeline/route.ts#L1-L149)
 
-### Appointment Booking and Rescheduling Workflow
+### Appointment Booking and Slot-Based Rescheduling Workflow
 - **Booking**: Inputs include pet, vet, clinic, date/time, reason. Validation checks required fields server-side. Authorization verifies pet ownership before booking. Conflict detection prevents double-booking within transactional scope. Result creates appointment with REQUESTED status and includes related entities.
-- **Rescheduling**: New comprehensive rescheduling system with modal dialog interface. Users can select new date/time using datetime-local input field. System validates appointment eligibility (only REQUESTED or CONFIRMED status), checks for time conflicts, and resets status to REQUESTED for vet approval.
+- **Slot-Based Rescheduling**: **Updated** Comprehensive rescheduling system with dynamic time slot selection grid. Users select a date first, then choose from available time slots displayed in a grid format. System validates appointment eligibility (only REQUESTED or CONFIRMED status), checks for time conflicts, and resets status to REQUESTED for vet approval.
 
 Cancellation:
 - Updates appointment status to CANCELLED and refreshes list.
@@ -294,39 +307,44 @@ Error handling:
 - [app/api/ai/chat/route.ts:7-66](file://app/api/ai/chat/route.ts#L7-L66)
 - [app/api/ai/chat/route.ts:68-349](file://app/api/ai/chat/route.ts#L68-L349)
 
-### **Enhanced: Appointment Rescheduling System**
+### **Enhanced: Slot-Based Appointment Rescheduling System**
 
-The dashboard now features a comprehensive appointment rescheduling system that allows pet owners to easily modify their scheduled appointments through an intuitive modal interface.
+The dashboard now features a comprehensive slot-based appointment rescheduling system that replaces the previous datetime picker with an intuitive dynamic time slot selection grid, providing a more controlled and user-friendly scheduling experience.
 
-#### Rescheduling Modal Implementation
-- **Modal Dialog**: Full-screen overlay with backdrop blur effect providing focused rescheduling experience.
-- **Date/Time Selection**: Native datetime-local input field with proper formatting and validation.
-- **State Management**: Dedicated state variables for reschedule target, date/time selection, and modal visibility.
-- **Form Handling**: Complete form submission with error handling and success feedback.
+#### Slot-Based Rescheduling Implementation
+- **Date Selection**: Native date input field with minimum date validation set to current date in Karachi timezone.
+- **Dynamic Time Slot Grid**: Server-generated available time slots displayed in a responsive 4-column grid layout.
+- **Real-time Slot Loading**: Automatic slot fetching when date changes, with loading states and error handling.
+- **Visual Slot States**: Clear visual indicators for current appointment time, unavailable slots, and selected slots.
+- **State Management**: Dedicated state variables for reschedule target, selected date, available slots, loading states, and selected slot ISO timestamp.
 
-#### Rescheduling Business Logic
-- **Eligibility Checks**: Only appointments with REQUESTED or CONFIRMED status can be rescheduled.
-- **Authorization**: Validates user owns the appointment and has appropriate permissions.
-- **Conflict Detection**: Prevents double-booking by checking for existing appointments at the same time slot.
-- **Status Management**: Resets appointment status to REQUESTED after rescheduling, requiring vet approval.
+#### Slot Availability Calculation
+- **Working Hours Enforcement**: Slots generated only for clinic working hours (9 AM - 5 PM Asia/Karachi timezone).
+- **Conflict Detection**: Server-side query excludes existing REQUESTED/CONFIRMED appointments for the same veterinarian.
+- **Past Time Filtering**: Current time comparison prevents selection of past time slots.
+- **Timezone Handling**: All calculations performed in Asia/Karachi timezone (UTC+5) for consistency.
 
 #### User Experience Features
-- **Visual Feedback**: Clear display of current appointment details including pet, vet, clinic, and current time.
-- **Error Handling**: Comprehensive error messages for invalid dates, past times, and conflict scenarios.
-- **Success Confirmation**: Clear feedback when rescheduling is successful with status change notification.
+- **Interactive Grid Layout**: Responsive grid displaying available time slots with hover effects and selection states.
+- **Current Time Highlighting**: Visual indication of the current appointment time to prevent accidental reselection.
+- **Loading Feedback**: Clear loading indicators during slot availability checks.
+- **Error Handling**: Comprehensive error messages for network issues, invalid dates, and unavailable slots.
+- **Form Validation**: Submit button disabled until a valid time slot is selected.
 
 #### Integration Points
 - **Dashboard Integration**: Reschedule buttons appear alongside Cancel buttons for eligible appointments.
-- **API Communication**: Seamless integration with appointment update API using standardized request format.
+- **API Communication**: Seamless integration with both slots API (`/api/appointments/{id}/slots`) and update API using standardized request format.
 - **State Synchronization**: Automatic refresh of appointment lists after successful rescheduling.
+- **Audit Logging**: Complete audit trail of rescheduling actions with before/after timestamps and status changes.
 
 **Section sources**
-- [app/dashboard/page.tsx:34-37](file://app/dashboard/page.tsx#L34-L37)
-- [app/dashboard/page.tsx:311-351](file://app/dashboard/page.tsx#L311-L351)
+- [app/dashboard/page.tsx:34-42](file://app/dashboard/page.tsx#L34-L42)
+- [app/dashboard/page.tsx:315-383](file://app/dashboard/page.tsx#L315-L383)
 - [app/dashboard/page.tsx:751-764](file://app/dashboard/page.tsx#L751-L764)
 - [app/dashboard/page.tsx:960-976](file://app/dashboard/page.tsx#L960-L976)
-- [app/dashboard/page.tsx:1454-1500](file://app/dashboard/page.tsx#L1454-L1500)
-- [app/api/appointments/[appointmentId]/route.ts:17-125](file://app/api/appointments/[appointmentId]/route.ts#L17-L125)
+- [app/dashboard/page.tsx:1486-1573](file://app/dashboard/page.tsx#L1486-L1573)
+- [app/api/appointments/[appointmentId]/slots/route.ts:15-103](file://app/api/appointments/[appointmentId]/slots/route.ts#L15-L103)
+- [app/api/appointments/[appointmentId]/route.ts:17-137](file://app/api/appointments/[appointmentId]/route.ts#L17-L137)
 
 ### Profile Management
 - Fetch current profile on load.
@@ -348,14 +366,15 @@ The dashboard now features a comprehensive appointment rescheduling system that 
 - Authentication dependency: All API routes use requireAuth to validate sessions and protect resources.
 - Data dependencies: Dashboard depends on multiple API routes; timeline aggregates several models.
 - AI integration: AI chat route depends on AI provider and tool execution, interacting with database for conversations and messages.
-- **New**: Rescheduling dependencies include appointment validation, conflict detection, and status management.
-- **New**: Conversation management dependencies include message polling, read status tracking, and real-time updates.
+- **Updated**: Rescheduling dependencies include new slots API for availability calculation, appointment validation, conflict detection, and status management.
+- **Updated**: Conversation management dependencies include message polling, read status tracking, and real-time updates.
 
 ```mermaid
 graph LR
 D["Dashboard Page"] --> P["Pets API"]
 D --> A["Appointments API"]
 D --> AR["Appointment Reschedule API"]
+D --> AS["Slots API"]
 D --> R["Profile API"]
 D --> T["Timeline API"]
 D --> C["AI Chat API"]
@@ -367,6 +386,7 @@ CA --> RD["Read Status API"]
 P --> AUTH["Auth"]
 A --> AUTH
 AR --> AUTH
+AS --> AUTH
 R --> AUTH
 T --> AUTH
 C --> AUTH
@@ -377,6 +397,7 @@ RD --> AUTH
 P --> DB["Prisma + Schema"]
 A --> DB
 AR --> DB
+AS --> DB
 R --> DB
 T --> DB
 C --> DB
@@ -386,11 +407,12 @@ RD --> DB
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:1-1505](file://app/dashboard/page.tsx#L1-L1505)
+- [app/dashboard/page.tsx:1-1578](file://app/dashboard/page.tsx#L1-L1578)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
 - [app/api/appointments/route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
-- [app/api/appointments/[appointmentId]/route.ts:1-230](file://app/api/appointments/[appointmentId]/route.ts#L1-L230)
+- [app/api/appointments/[appointmentId]/route.ts:1-242](file://app/api/appointments/[appointmentId]/route.ts#L1-L242)
+- [app/api/appointments/[appointmentId]/slots/route.ts:1-117](file://app/api/appointments/[appointmentId]/slots/route.ts#L1-L117)
 - [app/api/profile/route.ts:1-82](file://app/api/profile/route.ts#L1-L82)
 - [app/api/pets/[petId]/timeline/route.ts:1-149](file://app/api/pets/[petId]/timeline/route.ts#L1-L149)
 - [app/api/ai/chat/route.ts:1-120](file://app/api/ai/chat/route.ts#L1-L120)
@@ -410,12 +432,13 @@ RD --> DB
 - Streaming AI responses: NDJSON streaming provides immediate feedback and reduces perceived wait time.
 - Local state updates: Dashboard updates UI optimistically where appropriate and refetches lists after mutations to keep data consistent.
 - Pagination/context limits: AI chat loads recent messages (up to 20) to prevent context bloat and maintain performance.
-- **New**: Efficient rescheduling with immediate UI updates and background list refresh.
-- **New**: Optimized modal rendering with conditional loading to minimize unnecessary re-renders.
-- **New**: Date/time validation performed client-side to reduce server round trips.
-- **New**: Message polling with 3-second intervals to balance real-time updates with server load.
-- **New**: Message read status optimization to reduce unnecessary database updates.
-- **New**: Conversation listing with unread count optimization using database-level counting.
+- **Updated**: Efficient slot-based rescheduling with server-side availability calculation and immediate UI updates.
+- **Updated**: Optimized modal rendering with conditional loading to minimize unnecessary re-renders.
+- **Updated**: Date validation performed client-side with timezone-aware minimum date setting.
+- **Updated**: Dynamic slot loading triggered only on date changes to reduce server round trips.
+- **Updated**: Message polling with 3-second intervals to balance real-time updates with server load.
+- **Updated**: Message read status optimization to reduce unnecessary database updates.
+- **Updated**: Conversation listing with unread count optimization using database-level counting.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -423,31 +446,34 @@ Common issues and resolutions:
 - Forbidden access: Timeline and AI chat enforce pet ownership; verify that the logged-in user owns the selected pet.
 - Double-booking conflicts: Appointment creation checks for existing REQUESTED or CONFIRMED appointments at the same time slot; choose a different time or vet.
 - Network errors: Handle connection errors in UI and retry operations; check backend logs for internal server errors.
-- **New**: Rescheduling errors: Verify appointment status is REQUESTED or CONFIRMED and user has proper authorization.
-- **New**: Date/time validation issues: Ensure selected date is in the future and not conflicting with existing appointments.
-- **New**: Modal display problems: Check for proper state management and event handler bindings.
-- **New**: Chat access issues: Verify appointment status is CONFIRMED or COMPLETED and user has proper authorization.
-- **New**: Message delivery problems: Check network connectivity and server response times; implement retry logic for failed message sends.
+- **Updated**: Rescheduling errors: Verify appointment status is REQUESTED or CONFIRMED and user has proper authorization.
+- **Updated**: Slot availability issues: Check that selected date is in the future and within clinic working hours (9 AM - 5 PM Karachi time).
+- **Updated**: Timezone problems: Ensure all date calculations use Asia/Karachi timezone (UTC+5) consistently.
+- **Updated**: Modal display problems: Check for proper state management and event handler bindings.
+- **Updated**: Chat access issues: Verify appointment status is CONFIRMED or COMPLETED and user has proper authorization.
+- **Updated**: Message delivery problems: Check network connectivity and server response times; implement retry logic for failed message sends.
 
 Error handling patterns:
 - Consistent error objects returned by APIs with code and message.
 - UI displays error banners and disables actions during loading states.
-- **New**: Graceful degradation for rescheduling features when underlying services are unavailable.
-- **New**: Comprehensive error handling for modal dialogs with user-friendly error messages.
+- **Updated**: Graceful degradation for slot-based rescheduling features when underlying services are unavailable.
+- **Updated**: Comprehensive error handling for modal dialogs with user-friendly error messages.
+- **Updated**: Fallback UI states for slot loading failures and network interruptions.
 
 **Section sources**
 - [app/dashboard/page.tsx:45-96](file://app/dashboard/page.tsx#L45-L96)
-- [app/dashboard/page.tsx:311-351](file://app/dashboard/page.tsx#L311-L351)
+- [app/dashboard/page.tsx:315-383](file://app/dashboard/page.tsx#L315-L383)
 - [app/api/pets/[petId]/timeline/route.ts:14-31](file://app/api/pets/[petId]/timeline/route.ts#L14-L31)
 - [app/api/ai/chat/route.ts:20-27](file://app/api/ai/chat/route.ts#L20-L27)
 - [app/api/appointments/route.ts:84-110](file://app/api/appointments/route.ts#L84-L110)
 - [app/api/appointments/[appointmentId]/route.ts:44-79](file://app/api/appointments/[appointmentId]/route.ts#L44-L79)
+- [app/api/appointments/[appointmentId]/slots/route.ts:68-74](file://app/api/appointments/[appointmentId]/slots/route.ts#L68-L74)
 - [app/api/appointments/[appointmentId]/conversation/route.ts:26-38](file://app/api/appointments/[appointmentId]/conversation/route.ts#L26-L38)
 - [app/components/VetChatInterface.tsx:69-75](file://app/components/VetChatInterface.tsx#L69-L75)
 
 ## Conclusion
-The Pet Owner Dashboard integrates comprehensive health overview, pet portfolio management, appointment scheduling and rescheduling, and an AI-powered assistant with robust authentication, authorization, and error handling. Its responsive design ensures usability across devices, while efficient data fetching and streaming AI responses deliver a smooth user experience. The modular architecture separates concerns between client UI, API routes, and data layer, enabling maintainability and scalability.
+The Pet Owner Dashboard integrates comprehensive health overview, pet portfolio management, appointment scheduling and slot-based rescheduling, and an AI-powered assistant with robust authentication, authorization, and error handling. Its responsive design ensures usability across devices, while efficient data fetching and streaming AI responses deliver a smooth user experience. The modular architecture separates concerns between client UI, API routes, and data layer, enabling maintainability and scalability.
 
-**Updated** The addition of the complete appointment rescheduling system significantly enhances the platform's flexibility, allowing pet owners to easily modify their scheduled appointments through an intuitive modal interface. Combined with the dedicated chat tab with complete conversation management, the dashboard now provides comprehensive communication capabilities, enabling seamless interaction between pet owners and veterinarians through both appointment-based chat initiation and flexible scheduling options. The real-time messaging system with automatic read status tracking and the new rescheduling workflow provide professional features that complement the existing health management capabilities.
+**Updated** The addition of the complete slot-based appointment rescheduling system significantly enhances the platform's flexibility, replacing the previous datetime picker with an intuitive dynamic time slot selection grid that ensures optimal scheduling within clinic working hours. Combined with the dedicated chat tab with complete conversation management, the dashboard now provides comprehensive communication capabilities, enabling seamless interaction between pet owners and veterinarians through both appointment-based chat initiation and flexible slot-based scheduling options. The real-time messaging system with automatic read status tracking and the enhanced slot-based rescheduling workflow provide professional features that complement the existing health management capabilities while ensuring accurate and conflict-free appointment scheduling.
 
 [No sources needed since this section summarizes without analyzing specific files]

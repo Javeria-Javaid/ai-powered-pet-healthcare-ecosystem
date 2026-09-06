@@ -1,5 +1,5 @@
 'use client';
-import { PawPrint, Home, Calendar, Users, Building2, Settings, LogOut, Hand, Clock, Dog, X } from 'lucide-react';
+import { PawPrint, Home, Calendar, Users, Building2, Settings, LogOut, Hand, Clock, Dog, X, Stethoscope } from 'lucide-react';
 
 
 import { useState, useEffect } from 'react';
@@ -284,7 +284,7 @@ export default function ClinicDashboard() {
                 </div>
               </div>
               <div className="rounded-2xl border border-zinc-150 bg-white p-5 flex items-center gap-4 shadow-sm  ">
-                <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-lg /30">🩺</div>
+                <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-lg /30"><Stethoscope className="inline w-4 h-4" /></div>
                 <div>
                   <p className="text-2xl font-black">{vets.length.toString().padStart(2, '0')}</p>
                   <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Veterinarians</p>
@@ -376,7 +376,7 @@ export default function ClinicDashboard() {
                           className="flex items-center justify-between p-2 rounded-xl border border-zinc-100 bg-[#fbfcfd]/40  text-xs"
                         >
                           <div className="flex items-center gap-2">
-                            <span>🩺</span>
+                            <span className="text-purple-600"><Stethoscope className="inline w-4 h-4" /></span>
                             <div>
                               <h4 className="font-bold text-zinc-900 ">Dr. {vet.firstName} {vet.lastName}</h4>
                               <p className="text-[9px] text-zinc-400">{vet.specialization || 'General practice'}</p>

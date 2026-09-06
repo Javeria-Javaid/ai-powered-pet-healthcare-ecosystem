@@ -1,5 +1,5 @@
 'use client';
-import { User, Check, Building2 } from 'lucide-react';
+import { User, Check, Building2, Stethoscope } from 'lucide-react';
 
 
 interface CommunitiesSectionProps {
@@ -80,7 +80,7 @@ export default function CommunitiesSection({ onOwnerClick, onVetClick, onClinicC
             <div className="p-6 flex flex-col gap-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-violet-600 flex items-center justify-center text-white text-lg font-bold">
-                  🩺
+                  <Stethoscope className="inline w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-zinc-900">For Veterinarians</h3>

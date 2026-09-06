@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: ""
-title: Pet Healthcare Ecosystem Root
+title: Pet Healthcare Application Root
 scope:
     - README.md
     - package.json

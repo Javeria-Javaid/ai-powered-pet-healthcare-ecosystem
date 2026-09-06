@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: app_frontend
-title: Pet Healthcare Next.js App Router Frontend
+title: Next.js App Frontend (Landing, Dashboards & API Routes)
 scope:
     - app/
 source_files: []

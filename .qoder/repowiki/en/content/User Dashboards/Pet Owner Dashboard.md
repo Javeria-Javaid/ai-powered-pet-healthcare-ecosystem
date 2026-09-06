@@ -16,6 +16,8 @@
 - [app/api/conversations/route.ts](file://app/api/conversations/route.ts)
 - [app/api/conversations/[conversationId]/messages/route.ts](file://app/api/conversations/[conversationId]/messages/route.ts)
 - [app/api/conversations/[conversationId]/read/route.ts](file://app/api/conversations/[conversationId]/read/route.ts)
+- [app/api/reminders/route.ts](file://app/api/reminders/route.ts)
+- [app/api/reminders/[reminderId]/route.ts](file://app/api/reminders/[reminderId]/route.ts)
 - [lib/auth.ts](file://lib/auth.ts)
 - [prisma/schema.prisma](file://prisma/schema.prisma)
 - [app/layout.tsx](file://app/layout.tsx)
@@ -24,11 +26,12 @@
 
 ## Update Summary
 **Changes Made**
-- Updated appointment rescheduling workflow to use slot-based selection instead of datetime picker
-- Added comprehensive documentation for the new dynamic time slot selection grid interface
-- Enhanced rescheduling API documentation with new slots endpoint and improved validation
-- Updated user interaction patterns to reflect the new slot-based rescheduling experience
-- Added detailed coverage of server-side slot availability calculation and conflict detection
+- Added comprehensive health reminders section with due date tracking and clearance functionality
+- Implemented vaccination and medication forms with automatic reminder generation
+- Enhanced pet selection improvements with better visual indicators and status management
+- Updated timeline display with health activities including vaccinations, medications, and appointments
+- Integrated real-time reminder refresh system that updates after vaccination and medication additions
+- Added due date calculation helpers for consistent badge styling across all health tracking features
 
 ## Table of Contents
 1. Introduction
@@ -44,7 +47,7 @@
 ## Introduction
 This document explains the Pet Owner Dashboard in PETIVA, focusing on the main dashboard interface, pet portfolio management, appointment booking and rescheduling workflow, integrated AI health assistant chat, profile management, responsive design patterns, data fetching strategies, state management, and error handling. It is designed for both technical and non-technical readers to understand how the dashboard works end-to-end.
 
-**Updated** The dashboard now features an enhanced appointment rescheduling system with a slot-based workflow, replacing the previous datetime picker with an intuitive dynamic time slot selection grid that ensures optimal scheduling within clinic working hours while preventing conflicts.
+**Updated** The dashboard now features an enhanced health reminders system with comprehensive vaccination and medication tracking, providing users with proactive health management capabilities through automated reminder generation and due date monitoring.
 
 ## Project Structure
 The dashboard is implemented as a Next.js client component with server-side API routes for data operations. The root layout sets global styles and metadata. Tailwind CSS provides responsive utilities across devices.
@@ -68,6 +71,8 @@ CONV["Conversation API<br/>app/api/conversations/route.ts"]
 APPT_CONV["Appointment Conversation API<br/>app/api/appointments/[appointmentId]/conversation/route.ts"]
 MSG_API["Messages API<br/>app/api/conversations/[conversationId]/messages/route.ts"]
 READ_API["Read Status API<br/>app/api/conversations/[conversationId]/read/route.ts"]
+REMINDERS["Reminders API<br/>app/api/reminders/route.ts"]
+REMINDER_DELETE["Reminder Delete API<br/>app/api/reminders/[reminderId]/route.ts"]
 end
 subgraph "Auth & Data"
 AUTH["Auth Utilities<br/>lib/auth.ts"]
@@ -84,6 +89,8 @@ D --> CONV
 D --> APPT_CONV
 D --> MSG_API
 D --> READ_API
+D --> REMINDERS
+D --> REMINDER_DELETE
 W --> AICHAT
 VC --> MSG_API
 VC --> READ_API
@@ -98,6 +105,8 @@ CONV --> AUTH
 APPT_CONV --> AUTH
 MSG_API --> AUTH
 READ_API --> AUTH
+REMINDERS --> AUTH
+REMINDER_DELETE --> AUTH
 PETS --> SCHEMA
 APPTS --> SCHEMA
 APPT_UPDATE --> SCHEMA
@@ -109,10 +118,12 @@ CONV --> SCHEMA
 APPT_CONV --> SCHEMA
 MSG_API --> SCHEMA
 READ_API --> SCHEMA
+REMINDERS --> SCHEMA
+REMINDER_DELETE --> SCHEMA
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:1-1578](file://app/dashboard/page.tsx#L1-L1578)
+- [app/dashboard/page.tsx:1-1985](file://app/dashboard/page.tsx#L1-L1985)
 - [app/components/ChatWidget.tsx:1-149](file://app/components/ChatWidget.tsx#L1-L149)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
@@ -126,6 +137,8 @@ READ_API --> SCHEMA
 - [app/api/conversations/route.ts:1-90](file://app/api/conversations/route.ts#L1-L90)
 - [app/api/conversations/[conversationId]/messages/route.ts:1-104](file://app/api/conversations/[conversationId]/messages/route.ts#L1-L104)
 - [app/api/conversations/[conversationId]/read/route.ts:1-49](file://app/api/conversations/[conversationId]/read/route.ts#L1-L49)
+- [app/api/reminders/route.ts:1-30](file://app/api/reminders/route.ts#L1-L30)
+- [app/api/reminders/[reminderId]/route.ts:1-46](file://app/api/reminders/[reminderId]/route.ts#L1-L46)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [prisma/schema.prisma:1-312](file://prisma/schema.prisma#L1-L312)
 
@@ -137,18 +150,18 @@ READ_API --> SCHEMA
 - Dashboard page: Central UI for health overview, upcoming appointments, pet profiles, quick actions, and navigation between tabs (dashboard, pets, appointments, AI assistant, chat, profile).
 - Chat widget: Floating assistant for general platform help; separate from the pet-specific AI assistant in the dashboard.
 - VetChatInterface: Dedicated component for real-time conversation between pet owners and veterinarians with message polling and read status tracking.
-- API routes: Secure endpoints for pets, appointments, profile updates, pet timeline aggregation, AI chat with streaming responses, and comprehensive conversation management.
+- API routes: Secure endpoints for pets, appointments, profile updates, pet timeline aggregation, AI chat with streaming responses, comprehensive conversation management, and health reminders.
 - Auth middleware: Ensures all requests are authenticated and enforces ownership checks.
-- Database schema: Defines entities like User, Pet, Appointment, MedicalRecord, Vaccination, Medication, Allergy, HealthCondition, HealthMetric, AIConversation, AIMessage, Conversation, Message.
+- Database schema: Defines entities like User, Pet, Appointment, MedicalRecord, Vaccination, Medication, Allergy, HealthCondition, HealthMetric, AIConversation, AIMessage, Conversation, Message, Reminder.
 
 Key responsibilities:
 - Dashboard orchestrates data fetching, local state, and user interactions across multiple tabs.
 - API routes enforce authentication, authorization, validation, and business rules for all features.
 - Auth utilities provide session management and role-based guards.
-- Schema models ensure consistent data structure and relationships including new conversation and message entities.
+- Schema models ensure consistent data structure and relationships including new reminder entities.
 
 **Section sources**
-- [app/dashboard/page.tsx:1-1578](file://app/dashboard/page.tsx#L1-L1578)
+- [app/dashboard/page.tsx:1-1985](file://app/dashboard/page.tsx#L1-L1985)
 - [app/components/ChatWidget.tsx:1-149](file://app/components/ChatWidget.tsx#L1-L149)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
@@ -162,14 +175,16 @@ Key responsibilities:
 - [app/api/conversations/route.ts:1-90](file://app/api/conversations/route.ts#L1-L90)
 - [app/api/conversations/[conversationId]/messages/route.ts:1-104](file://app/api/conversations/[conversationId]/messages/route.ts#L1-L104)
 - [app/api/conversations/[conversationId]/read/route.ts:1-49](file://app/api/conversations/[conversationId]/read/route.ts#L1-L49)
+- [app/api/reminders/route.ts:1-30](file://app/api/reminders/route.ts#L1-L30)
+- [app/api/reminders/[reminderId]/route.ts:1-46](file://app/api/reminders/[reminderId]/route.ts#L1-L46)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [prisma/schema.prisma:1-312](file://prisma/schema.prisma#L1-L312)
 
 ## Architecture Overview
-The dashboard follows a client-server architecture with enhanced conversation management and slot-based appointment rescheduling capabilities:
-- Client: React components manage UI state and call APIs for multiple tabs including the new chat functionality and slot-based rescheduling features.
-- Server: Next.js API routes handle authentication, authorization, database queries, business logic, and real-time conversation updates.
-- Data: Prisma ORM interacts with PostgreSQL based on the defined schema including new conversation and message tables.
+The dashboard follows a client-server architecture with enhanced conversation management, slot-based appointment rescheduling, and comprehensive health reminders capabilities:
+- Client: React components manage UI state and call APIs for multiple tabs including the new chat functionality, slot-based rescheduling features, and health reminders management.
+- Server: Next.js API routes handle authentication, authorization, database queries, business logic, real-time conversation updates, and reminder management.
+- Data: Prisma ORM interacts with PostgreSQL based on the defined schema including new reminder tables for health tracking.
 - AI: Streaming NDJSON responses enable real-time status updates and results during AI processing.
 - Real-time Messaging: Polling-based messaging system with automatic read status updates.
 
@@ -182,8 +197,15 @@ participant AC as "AI Chat API"
 participant CC as "Conversation API"
 participant AR as "Appointment Reschedule API"
 participant AS as "Slots API"
+participant RM as "Reminders API"
 participant DB as "Database"
-U->>D : Navigate to Appointments Tab
+U->>D : Navigate to Dashboard
+U->>D : View Health Reminders
+D->>RM : GET /api/reminders
+RM-->>D : Return pending reminders
+U->>D : Add Vaccination/Medication
+D->>RM : Refresh reminders after update
+RM-->>D : Return updated reminders
 U->>D : Click Reschedule Button
 D->>AS : GET /api/appointments/{id}/slots?date=YYYY-MM-DD
 AS->>DB : Check vet availability & working hours
@@ -209,14 +231,16 @@ VC-->>U : Display Real-time Messages
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:100-118](file://app/dashboard/page.tsx#L100-L118)
-- [app/dashboard/page.tsx:319-351](file://app/dashboard/page.tsx#L319-L351)
+- [app/dashboard/page.tsx:66-132](file://app/dashboard/page.tsx#L66-L132)
+- [app/dashboard/page.tsx:226-249](file://app/dashboard/page.tsx#L226-L249)
+- [app/dashboard/page.tsx:474-535](file://app/dashboard/page.tsx#L474-L535)
 - [app/components/VetChatInterface.tsx:56-85](file://app/components/VetChatInterface.tsx#L56-L85)
 - [app/api/appointments/[appointmentId]/route.ts:17-125](file://app/api/appointments/[appointmentId]/route.ts#L17-L125)
 - [app/api/appointments/[appointmentId]/slots/route.ts:15-103](file://app/api/appointments/[appointmentId]/slots/route.ts#L15-L103)
 - [app/api/appointments/[appointmentId]/conversation/route.ts:10-55](file://app/api/appointments/[appointmentId]/conversation/route.ts#L10-L55)
 - [app/api/conversations/[conversationId]/messages/route.ts:5-38](file://app/api/conversations/[conversationId]/messages/route.ts#L5-L38)
 - [app/api/conversations/[conversationId]/read/route.ts:5-41](file://app/api/conversations/[conversationId]/read/route.ts#L5-L41)
+- [app/api/reminders/route.ts:7-16](file://app/api/reminders/route.ts#L7-L16)
 
 ## Detailed Component Analysis
 
@@ -225,13 +249,15 @@ VC-->>U : Display Real-time Messages
 - Health overview panels: Counts for vaccinations, medications, allergies, last visit date derived from timeline.
 - Upcoming appointment card: Shows next future appointment details with both Reschedule and Cancel options.
 - Recent health activity timeline: Aggregated events from medical records, vaccinations, medications, allergies, conditions, metrics, and appointments.
+- **Enhanced**: Health reminders section displaying pending tasks with due date badges and clearance functionality.
 - Quick actions: Add new pet and book appointment buttons.
 
 Data flow:
-- On mount, fetch profile, pets, appointments, discovery vets, and initial timeline for the first pet.
-- Selecting a pet updates selected pet, AI pet context, and reloads timeline.
+- On mount, fetch profile, pets, appointments, discovery vets, initial timeline, and reminders for the first pet.
+- Selecting a pet updates selected pet, AI pet context, reloads timeline, vaccinations, and medications.
 - Booking an appointment posts to API and refreshes list.
-- **Updated**: Reschedule functionality now uses slot-based selection with dynamic time slot grid instead of datetime picker.
+- **Updated**: Reschedule functionality uses slot-based selection with dynamic time slot grid instead of datetime picker.
+- **Updated**: Health reminders automatically refresh when vaccinations or medications are added.
 
 Error handling:
 - Displays error or success banners for user feedback.
@@ -241,12 +267,12 @@ Responsive behavior:
 - Uses Tailwind grid and flex layouts to adapt across screen sizes.
 
 **Section sources**
-- [app/dashboard/page.tsx:45-138](file://app/dashboard/page.tsx#L45-L138)
-- [app/dashboard/page.tsx:382-759](file://app/dashboard/page.tsx#L382-L759)
-- [app/dashboard/page.tsx:858-922](file://app/dashboard/page.tsx#L858-L922)
+- [app/dashboard/page.tsx:66-132](file://app/dashboard/page.tsx#L66-L132)
+- [app/dashboard/page.tsx:760-1067](file://app/dashboard/page.tsx#L760-L1067)
+- [app/dashboard/page.tsx:996-1026](file://app/dashboard/page.tsx#L996-L1026)
 
 ### Pet Portfolio Management
-- Lists all pets with selection highlighting.
+- Lists all pets with selection highlighting and improved visual indicators.
 - Provides add/edit/delete operations via forms and API calls.
 - Displays detailed pet profile view including health overview and timeline access.
 
@@ -259,8 +285,57 @@ Validation and errors:
 - Required fields enforced server-side; errors surfaced to UI.
 
 **Section sources**
-- [app/dashboard/page.tsx:164-230](file://app/dashboard/page.tsx#L164-L230)
+- [app/dashboard/page.tsx:800-831](file://app/dashboard/page.tsx#L800-L831)
+- [app/dashboard/page.tsx:1070-1130](file://app/dashboard/page.tsx#L1070-L1130)
 - [app/api/pets/route.ts:30-69](file://app/api/pets/route.ts#L30-L69)
+
+### Health Tracking with Vaccinations and Medications
+- **New Feature**: Comprehensive vaccination tracking with due date management and automatic reminder generation.
+- **New Feature**: Medication tracking with dosage, frequency, and active/inactive status monitoring.
+- **New Feature**: Due date calculation helpers providing consistent badge styling (overdue, due soon, upcoming).
+- **New Feature**: Interactive forms for adding vaccinations and medications with validation.
+
+Operations:
+- Add vaccination: POST to `/api/pets/{petId}/vaccinations` with vaccine name, administered date, due date, and vet name.
+- Add medication: POST to `/api/pets/{petId}/medications` with medication details, dosage, frequency, and date range.
+- Automatic reminder creation when due dates are set.
+- Real-time refresh of reminders and timeline after additions.
+
+Display features:
+- Visual due date badges with color coding (red for overdue, orange for due soon, green for upcoming).
+- Active medication status indicators.
+- Integration with health reminders system.
+
+**Section sources**
+- [app/dashboard/page.tsx:43-52](file://app/dashboard/page.tsx#L43-L52)
+- [app/dashboard/page.tsx:209-225](file://app/dashboard/page.tsx#L209-L225)
+- [app/dashboard/page.tsx:251-309](file://app/dashboard/page.tsx#L251-L309)
+- [app/dashboard/page.tsx:1131-1208](file://app/dashboard/page.tsx#L1131-L1208)
+
+### Health Reminders System
+- **New Feature**: Centralized health reminders display showing all pending tasks with due dates.
+- **New Feature**: Automatic reminder generation from vaccination due dates and medication end dates.
+- **New Feature**: Clear functionality allowing users to dismiss completed reminders.
+- **New Feature**: Due date calculation with contextual labels (overdue, due today, due in X days).
+
+Features:
+- Grid layout displaying reminders with title, due date, and clearance button.
+- Color-coded due date badges matching the health tracking system.
+- Empty state guidance encouraging users to record vaccinations or medications.
+- Real-time updates when reminders are cleared or new ones are created.
+
+Integration points:
+- Automatically refreshed after vaccination and medication additions.
+- Fetches from `/api/reminders` endpoint with proper authentication.
+- Supports deletion via `/api/reminders/{reminderId}` endpoint.
+
+**Section sources**
+- [app/dashboard/page.tsx:114-118](file://app/dashboard/page.tsx#L114-L118)
+- [app/dashboard/page.tsx:226-236](file://app/dashboard/page.tsx#L226-L236)
+- [app/dashboard/page.tsx:311-321](file://app/dashboard/page.tsx#L311-L321)
+- [app/dashboard/page.tsx:996-1026](file://app/dashboard/page.tsx#L996-L1026)
+- [app/api/reminders/route.ts:7-16](file://app/api/reminders/route.ts#L7-L16)
+- [app/api/reminders/[reminderId]/route.ts:8-32](file://app/api/reminders/[reminderId]/route.ts#L8-L32)
 
 ### Pet Timeline and Health Records
 - Aggregates multiple data sources into a unified chronological timeline:
@@ -282,8 +357,8 @@ Cancellation:
 - Updates appointment status to CANCELLED and refreshes list.
 
 **Section sources**
-- [app/dashboard/page.tsx:232-280](file://app/dashboard/page.tsx#L232-L280)
-- [app/dashboard/page.tsx:311-351](file://app/dashboard/page.tsx#L311-L351)
+- [app/dashboard/page.tsx:415-465](file://app/dashboard/page.tsx#L415-L465)
+- [app/dashboard/page.tsx:474-535](file://app/dashboard/page.tsx#L474-L535)
 - [app/api/appointments/route.ts:69-143](file://app/api/appointments/route.ts#L69-L143)
 - [app/api/appointments/[appointmentId]/route.ts:17-125](file://app/api/appointments/[appointmentId]/route.ts#L17-L125)
 
@@ -302,49 +377,10 @@ Error handling:
 - Handles connection errors and tool failures gracefully.
 
 **Section sources**
-- [app/dashboard/page.tsx:103-122](file://app/dashboard/page.tsx#L103-L122)
-- [app/dashboard/page.tsx:282-352](file://app/dashboard/page.tsx#L282-L352)
+- [app/dashboard/page.tsx:160-179](file://app/dashboard/page.tsx#L160-L179)
+- [app/dashboard/page.tsx:537-613](file://app/dashboard/page.tsx#L537-L613)
 - [app/api/ai/chat/route.ts:7-66](file://app/api/ai/chat/route.ts#L7-L66)
 - [app/api/ai/chat/route.ts:68-349](file://app/api/ai/chat/route.ts#L68-L349)
-
-### **Enhanced: Slot-Based Appointment Rescheduling System**
-
-The dashboard now features a comprehensive slot-based appointment rescheduling system that replaces the previous datetime picker with an intuitive dynamic time slot selection grid, providing a more controlled and user-friendly scheduling experience.
-
-#### Slot-Based Rescheduling Implementation
-- **Date Selection**: Native date input field with minimum date validation set to current date in Karachi timezone.
-- **Dynamic Time Slot Grid**: Server-generated available time slots displayed in a responsive 4-column grid layout.
-- **Real-time Slot Loading**: Automatic slot fetching when date changes, with loading states and error handling.
-- **Visual Slot States**: Clear visual indicators for current appointment time, unavailable slots, and selected slots.
-- **State Management**: Dedicated state variables for reschedule target, selected date, available slots, loading states, and selected slot ISO timestamp.
-
-#### Slot Availability Calculation
-- **Working Hours Enforcement**: Slots generated only for clinic working hours (9 AM - 5 PM Asia/Karachi timezone).
-- **Conflict Detection**: Server-side query excludes existing REQUESTED/CONFIRMED appointments for the same veterinarian.
-- **Past Time Filtering**: Current time comparison prevents selection of past time slots.
-- **Timezone Handling**: All calculations performed in Asia/Karachi timezone (UTC+5) for consistency.
-
-#### User Experience Features
-- **Interactive Grid Layout**: Responsive grid displaying available time slots with hover effects and selection states.
-- **Current Time Highlighting**: Visual indication of the current appointment time to prevent accidental reselection.
-- **Loading Feedback**: Clear loading indicators during slot availability checks.
-- **Error Handling**: Comprehensive error messages for network issues, invalid dates, and unavailable slots.
-- **Form Validation**: Submit button disabled until a valid time slot is selected.
-
-#### Integration Points
-- **Dashboard Integration**: Reschedule buttons appear alongside Cancel buttons for eligible appointments.
-- **API Communication**: Seamless integration with both slots API (`/api/appointments/{id}/slots`) and update API using standardized request format.
-- **State Synchronization**: Automatic refresh of appointment lists after successful rescheduling.
-- **Audit Logging**: Complete audit trail of rescheduling actions with before/after timestamps and status changes.
-
-**Section sources**
-- [app/dashboard/page.tsx:34-42](file://app/dashboard/page.tsx#L34-L42)
-- [app/dashboard/page.tsx:315-383](file://app/dashboard/page.tsx#L315-L383)
-- [app/dashboard/page.tsx:751-764](file://app/dashboard/page.tsx#L751-L764)
-- [app/dashboard/page.tsx:960-976](file://app/dashboard/page.tsx#L960-L976)
-- [app/dashboard/page.tsx:1486-1573](file://app/dashboard/page.tsx#L1486-L1573)
-- [app/api/appointments/[appointmentId]/slots/route.ts:15-103](file://app/api/appointments/[appointmentId]/slots/route.ts#L15-L103)
-- [app/api/appointments/[appointmentId]/route.ts:17-137](file://app/api/appointments/[appointmentId]/route.ts#L17-L137)
 
 ### Profile Management
 - Fetch current profile on load.
@@ -352,7 +388,8 @@ The dashboard now features a comprehensive slot-based appointment rescheduling s
 - Enforce required fields and return updated profile.
 
 **Section sources**
-- [app/dashboard/page.tsx:140-162](file://app/dashboard/page.tsx#L140-L162)
+- [app/dashboard/page.tsx:134-153](file://app/dashboard/page.tsx#L134-L153)
+- [app/dashboard/page.tsx:323-345](file://app/dashboard/page.tsx#L323-L345)
 - [app/api/profile/route.ts:5-82](file://app/api/profile/route.ts#L5-L82)
 
 ### Floating Chat Widget (Platform Help)
@@ -368,6 +405,7 @@ The dashboard now features a comprehensive slot-based appointment rescheduling s
 - AI integration: AI chat route depends on AI provider and tool execution, interacting with database for conversations and messages.
 - **Updated**: Rescheduling dependencies include new slots API for availability calculation, appointment validation, conflict detection, and status management.
 - **Updated**: Conversation management dependencies include message polling, read status tracking, and real-time updates.
+- **Updated**: Health reminders dependencies include reminder CRUD operations with proper ownership validation.
 
 ```mermaid
 graph LR
@@ -379,10 +417,12 @@ D --> R["Profile API"]
 D --> T["Timeline API"]
 D --> C["AI Chat API"]
 D --> CH["Chat Tab"]
+D --> RM["Reminders API"]
 CH --> VCI["VetChatInterface"]
 VCI --> CA["Conversation API"]
 CA --> M["Messages API"]
 CA --> RD["Read Status API"]
+RM --> RMD["Reminder Delete API"]
 P --> AUTH["Auth"]
 A --> AUTH
 AR --> AUTH
@@ -394,6 +434,8 @@ CH --> AUTH
 VCI --> AUTH
 M --> AUTH
 RD --> AUTH
+RM --> AUTH
+RMD --> AUTH
 P --> DB["Prisma + Schema"]
 A --> DB
 AR --> DB
@@ -404,10 +446,12 @@ C --> DB
 CA --> DB
 M --> DB
 RD --> DB
+RM --> DB
+RMD --> DB
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:1-1578](file://app/dashboard/page.tsx#L1-L1578)
+- [app/dashboard/page.tsx:1-1985](file://app/dashboard/page.tsx#L1-L1985)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
 - [app/api/appointments/route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
@@ -420,6 +464,8 @@ RD --> DB
 - [app/api/conversations/route.ts:1-90](file://app/api/conversations/route.ts#L1-L90)
 - [app/api/conversations/[conversationId]/messages/route.ts:1-104](file://app/api/conversations/[conversationId]/messages/route.ts#L1-L104)
 - [app/api/conversations/[conversationId]/read/route.ts:1-49](file://app/api/conversations/[conversationId]/read/route.ts#L1-L49)
+- [app/api/reminders/route.ts:1-30](file://app/api/reminders/route.ts#L1-L30)
+- [app/api/reminders/[reminderId]/route.ts:1-46](file://app/api/reminders/[reminderId]/route.ts#L1-L46)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [prisma/schema.prisma:1-312](file://prisma/schema.prisma#L1-L312)
 
@@ -439,6 +485,8 @@ RD --> DB
 - **Updated**: Message polling with 3-second intervals to balance real-time updates with server load.
 - **Updated**: Message read status optimization to reduce unnecessary database updates.
 - **Updated**: Conversation listing with unread count optimization using database-level counting.
+- **Updated**: Health reminders refresh only when necessary (after vaccination/medication additions) to minimize API calls.
+- **Updated**: Due date calculations performed client-side using efficient mathematical operations.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -452,6 +500,8 @@ Common issues and resolutions:
 - **Updated**: Modal display problems: Check for proper state management and event handler bindings.
 - **Updated**: Chat access issues: Verify appointment status is CONFIRMED or COMPLETED and user has proper authorization.
 - **Updated**: Message delivery problems: Check network connectivity and server response times; implement retry logic for failed message sends.
+- **Updated**: Reminder clearance issues: Verify reminder ownership and proper authentication before deletion attempts.
+- **Updated**: Vaccination/medication form validation: Ensure all required fields are properly filled and formatted before submission.
 
 Error handling patterns:
 - Consistent error objects returned by APIs with code and message.
@@ -459,10 +509,11 @@ Error handling patterns:
 - **Updated**: Graceful degradation for slot-based rescheduling features when underlying services are unavailable.
 - **Updated**: Comprehensive error handling for modal dialogs with user-friendly error messages.
 - **Updated**: Fallback UI states for slot loading failures and network interruptions.
+- **Updated**: Proper error handling for reminder operations with clear user feedback.
 
 **Section sources**
-- [app/dashboard/page.tsx:45-96](file://app/dashboard/page.tsx#L45-L96)
-- [app/dashboard/page.tsx:315-383](file://app/dashboard/page.tsx#L315-L383)
+- [app/dashboard/page.tsx:66-132](file://app/dashboard/page.tsx#L66-L132)
+- [app/dashboard/page.tsx:474-535](file://app/dashboard/page.tsx#L474-L535)
 - [app/api/pets/[petId]/timeline/route.ts:14-31](file://app/api/pets/[petId]/timeline/route.ts#L14-L31)
 - [app/api/ai/chat/route.ts:20-27](file://app/api/ai/chat/route.ts#L20-L27)
 - [app/api/appointments/route.ts:84-110](file://app/api/appointments/route.ts#L84-L110)
@@ -470,10 +521,12 @@ Error handling patterns:
 - [app/api/appointments/[appointmentId]/slots/route.ts:68-74](file://app/api/appointments/[appointmentId]/slots/route.ts#L68-L74)
 - [app/api/appointments/[appointmentId]/conversation/route.ts:26-38](file://app/api/appointments/[appointmentId]/conversation/route.ts#L26-L38)
 - [app/components/VetChatInterface.tsx:69-75](file://app/components/VetChatInterface.tsx#L69-L75)
+- [app/api/reminders/route.ts:17-27](file://app/api/reminders/route.ts#L17-L27)
+- [app/api/reminders/[reminderId]/route.ts:33-43](file://app/api/reminders/[reminderId]/route.ts#L33-L43)
 
 ## Conclusion
-The Pet Owner Dashboard integrates comprehensive health overview, pet portfolio management, appointment scheduling and slot-based rescheduling, and an AI-powered assistant with robust authentication, authorization, and error handling. Its responsive design ensures usability across devices, while efficient data fetching and streaming AI responses deliver a smooth user experience. The modular architecture separates concerns between client UI, API routes, and data layer, enabling maintainability and scalability.
+The Pet Owner Dashboard integrates comprehensive health overview, pet portfolio management, appointment scheduling and slot-based rescheduling, health reminders and tracking, and an AI-powered assistant with robust authentication, authorization, and error handling. Its responsive design ensures usability across devices, while efficient data fetching and streaming AI responses deliver a smooth user experience. The modular architecture separates concerns between client UI, API routes, and data layer, enabling maintainability and scalability.
 
-**Updated** The addition of the complete slot-based appointment rescheduling system significantly enhances the platform's flexibility, replacing the previous datetime picker with an intuitive dynamic time slot selection grid that ensures optimal scheduling within clinic working hours. Combined with the dedicated chat tab with complete conversation management, the dashboard now provides comprehensive communication capabilities, enabling seamless interaction between pet owners and veterinarians through both appointment-based chat initiation and flexible slot-based scheduling options. The real-time messaging system with automatic read status tracking and the enhanced slot-based rescheduling workflow provide professional features that complement the existing health management capabilities while ensuring accurate and conflict-free appointment scheduling.
+**Updated** The addition of comprehensive health reminders, vaccination and medication tracking systems significantly enhances the platform's proactive health management capabilities. The new health reminders section provides users with automated task management based on vaccination due dates and medication schedules, while the enhanced pet selection improvements offer better visual feedback and status indicators. Combined with the dedicated chat tab with complete conversation management and the enhanced slot-based rescheduling workflow, the dashboard now provides a complete health management solution that seamlessly integrates preventive care tracking with appointment scheduling and veterinary communication capabilities. The real-time messaging system, automatic reminder generation, and enhanced health tracking features work together to create a comprehensive pet healthcare management platform that helps pet owners stay organized and proactive about their pets' health needs.
 
 [No sources needed since this section summarizes without analyzing specific files]

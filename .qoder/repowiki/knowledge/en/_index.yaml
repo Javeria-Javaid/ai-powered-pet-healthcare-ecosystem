@@ -3,11 +3,11 @@ schema_version: 1
 locale: en-US
 branch: master
 nodes_managed: true
-exported_at: "2026-09-05T23:25:06Z"
+exported_at: "2026-09-05T23:57:12Z"
 modules:
     "":
-        dir_name: Pet Healthcare Ecosystem Root
-        title: Pet Healthcare Ecosystem Root
+        dir_name: Pet Healthcare Application Root
+        title: Pet Healthcare Application Root
         scope:
             - README.md
             - package.json
@@ -36,8 +36,8 @@ modules:
         depends_on: []
         related_to: []
     app_frontend:
-        dir_name: Pet Healthcare Next.js App Router Frontend
-        title: Pet Healthcare Next.js App Router Frontend
+        dir_name: Next.js App Frontend (Landing, Dashboards & API Routes)
+        title: Next.js App Frontend (Landing, Dashboards & API Routes)
         scope:
             - app/
         source_files: []

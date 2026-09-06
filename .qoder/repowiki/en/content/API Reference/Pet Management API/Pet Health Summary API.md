@@ -3,6 +3,7 @@
 <cite>
 **Referenced Files in This Document**
 - [health-summary/route.ts](file://app/api/pets/[petId]/health-summary/route.ts)
+- [dashboard/page.tsx](file://app/dashboard/page.tsx)
 - [pets/route.ts](file://app/api/pets/route.ts)
 - [pets/[petId]/route.ts](file://app/api/pets/[petId]/route.ts)
 - [vaccinations/route.ts](file://app/api/pets/[petId]/vaccinations/route.ts)
@@ -14,45 +15,63 @@
 - [api-specification.md](file://docs/03-architecture/03-api-specification.md)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced AI Health Summary feature with comprehensive UI implementation in pet owner dashboard
+- Added detailed health facts display with categorized sections (conditions, allergies, consultations, medications, vaccinations)
+- Implemented AI-generated interpretations with distinct visual separation from stored facts
+- Integrated loading states and error handling throughout the dashboard interface
+- Added interactive summary generation with regenerate functionality
+- Enhanced user experience with clear labeling and contextual information
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
+6. [Dashboard UI Implementation](#dashboard-ui-implementation)
+7. [Dependency Analysis](#dependency-analysis)
+8. [Performance Considerations](#performance-considerations)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains the Pet Health Summary API, which aggregates a pet’s structured health records and produces an AI-generated summary to help owners prepare for veterinary visits. The endpoint returns two distinct parts:
+This document explains the Pet Health Summary API, which aggregates a pet's structured health records and produces an AI-generated summary to help owners prepare for veterinary visits. The endpoint returns two distinct parts:
 - Stored facts: verbatim data from the database (conditions, consultations, medications, vaccinations, allergies, metrics, appointments).
 - AI summary: a concise overview, recurring concerns, observations, and suggested topics for the veterinarian.
 
-The service enforces authentication and ownership checks server-side and is resilient to AI provider failures by still returning stored facts even if the AI summary cannot be generated.
+The service enforces authentication and ownership checks server-side and is resilient to AI provider failures by still returning stored facts even if the AI summary cannot be generated. **Updated**: The feature now includes a comprehensive UI implementation in the pet owner dashboard with enhanced user experience, loading states, error handling, and clear visual separation between stored facts and AI-generated interpretations.
 
 ## Project Structure
-The Pet Health Summary feature spans Next.js App Router route handlers, Prisma schema models, shared auth and DB modules, and an AI provider abstraction.
+The Pet Health Summary feature spans Next.js App Router route handlers, Prisma schema models, shared auth and DB modules, AI provider abstraction, and a comprehensive dashboard UI component.
 
 ```mermaid
 graph TB
-Client["Client"] --> API["Next.js Route Handler<br/>GET /api/pets/[petId]/health-summary"]
+Client["Pet Owner Dashboard"] --> API["Next.js Route Handler<br/>GET /api/pets/[petId]/health-summary"]
 API --> Auth["requireAuth()"]
 API --> DB["Prisma Client"]
 DB --> Schema["PostgreSQL Schema"]
 API --> AI["AI Provider<br/>getAIProvider()"]
 AI --> LLM["External LLM Service"]
+UI["Dashboard UI Component"] --> State["React State Management"]
+State --> Loading["Loading States"]
+State --> Error["Error Handling"]
+State --> Display["Health Facts & AI Interpretation"]
 ```
 
 **Diagram sources**
 - [health-summary/route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+- [dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
 - [db.ts:1-33](file://lib/db.ts#L1-L33)
 - [auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [ai.ts:1-137](file://lib/ai.ts#L1-L137)
 
 **Section sources**
 - [health-summary/route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+- [dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
 - [schema.prisma:70-249](file://prisma/schema.prisma#L70-L249)
 - [db.ts:1-33](file://lib/db.ts#L1-L33)
 - [auth.ts:1-125](file://lib/auth.ts#L1-L125)
@@ -63,48 +82,59 @@ AI --> LLM["External LLM Service"]
 - Authentication: Session-based auth via cookies; requires valid session and validates ownership of the pet.
 - Data Layer: Prisma client configured with PostgreSQL; uses connection pooling and environment-specific initialization.
 - AI Provider Abstraction: Pluggable providers (Groq fallback, Gemini, Qwen, OpenRouter) selected by environment variable; robust parsing of JSON responses.
+- **Enhanced Dashboard UI**: Comprehensive React component with state management, loading indicators, error handling, and visually distinct sections for stored facts vs AI interpretations.
 
 Key responsibilities:
 - Enforce authorization and ownership at the API boundary.
 - Aggregate multiple related entities efficiently using parallel queries.
 - Provide clear separation between factual data and AI-generated insights.
 - Handle external AI failures gracefully without compromising core data delivery.
+- **Deliver intuitive user interface with real-time feedback and comprehensive error handling.**
 
 **Section sources**
 - [health-summary/route.ts:32-205](file://app/api/pets/[petId]/health-summary/route.ts#L32-L205)
+- [dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+- [dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
 - [auth.ts:99-125](file://lib/auth.ts#L99-L125)
 - [db.ts:1-33](file://lib/db.ts#L1-L33)
 - [ai.ts:105-137](file://lib/ai.ts#L105-L137)
 
 ## Architecture Overview
-The request flow authenticates the user, verifies pet ownership, gathers structured health data, invokes the AI provider, and returns a combined response.
+The request flow authenticates the user, verifies pet ownership, gathers structured health data, invokes the AI provider, and returns a combined response. **Updated**: The dashboard UI provides comprehensive user interaction with loading states, error handling, and visually distinct presentation of different data types.
 
 ```mermaid
 sequenceDiagram
-participant C as "Client"
+participant U as "User"
+participant D as "Dashboard UI"
 participant R as "Route Handler"
 participant A as "Auth"
-participant D as "Prisma DB"
-participant P as "AI Provider"
+participant P as "Prisma DB"
+participant AI as "AI Provider"
 participant L as "LLM Service"
-C->>R : GET /api/pets/{petId}/health-summary
+U->>D : Click "Generate Summary"
+D->>D : Set loading state
+D->>R : GET /api/pets/{petId}/health-summary
 R->>A : requireAuth()
 A-->>R : User object
-R->>D : Find pet by id
-D-->>R : Pet or not found
+R->>P : Find pet by id
+P-->>R : Pet or not found
 R->>R : Check pet.ownerId === user.id
-R->>D : Parallel fetch (records, vaccines, meds, allergies, conditions, metrics, appointments)
-D-->>R : Aggregated facts
-R->>P : generateResponse(system + user prompt with facts)
-P->>L : Chat completion request
-L-->>P : Raw text response
-P-->>R : Content string
+R->>P : Parallel fetch (records, vaccines, meds, allergies, conditions, metrics, appointments)
+P-->>R : Aggregated facts
+R->>AI : generateResponse(system + user prompt with facts)
+AI->>L : Chat completion request
+L-->>AI : Raw text response
+AI-->>R : Content string
 R->>R : Parse JSON from content
-R-->>C : { success, pet, facts, summary?, aiError?, meta }
+R-->>D : { success, pet, facts, summary?, aiError?, meta }
+D->>D : Update UI with facts & AI interpretation
+D-->>U : Display health summary with loading/error states
 ```
 
 **Diagram sources**
 - [health-summary/route.ts:32-205](file://app/api/pets/[petId]/health-summary/route.ts#L32-L205)
+- [dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+- [dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
 - [auth.ts:99-125](file://lib/auth.ts#L99-L125)
 - [ai.ts:105-137](file://lib/ai.ts#L105-L137)
 
@@ -134,6 +164,28 @@ Response envelope:
 
 **Section sources**
 - [health-summary/route.ts:32-205](file://app/api/pets/[petId]/health-summary/route.ts#L32-L205)
+
+### Enhanced Dashboard UI Implementation
+**New Section**: The dashboard now features a comprehensive UI implementation for the AI Health Summary with:
+
+- **Interactive Generation**: Button-triggered summary generation with loading states
+- **Visual Distinction**: Clear separation between stored facts (blue-themed) and AI interpretations (purple-themed)
+- **Comprehensive Error Handling**: Graceful error messages and fallback displays
+- **Rich Data Presentation**: Organized display of conditions, allergies, consultations, medications, and vaccinations
+- **Regenerate Functionality**: Ability to refresh summaries with updated data
+- **Contextual Information**: Labels indicating data source and purpose
+
+Key UI components:
+- Loading indicator during summary generation
+- Empty state messaging when no summary exists
+- Structured fact display with categorized sections
+- AI interpretation display with overview, concerns, observations, and vet topics
+- Error state handling with user-friendly messages
+- Metadata display showing provider and generation timestamp
+
+**Section sources**
+- [dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+- [dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
 
 ### Authentication and Authorization
 - requireAuth(): Validates session cookie, returns user or throws UNAUTHENTICATED.
@@ -194,12 +246,42 @@ These endpoints complement the health summary by enabling data entry that feeds 
 - [vaccinations/route.ts:1-156](file://app/api/pets/[petId]/vaccinations/route.ts#L1-L156)
 - [medications/route.ts:1-158](file://app/api/pets/[petId]/medications/route.ts#L1-L158)
 
+## Dashboard UI Implementation
+**New Section**: The pet owner dashboard now features a comprehensive AI Health Summary interface with enhanced user experience.
+
+### User Interface Components
+- **Summary Generation Button**: Prominently placed with loading state indication
+- **Stored Health Facts Section**: Blue-themed section displaying raw database records
+- **AI-Generated Interpretation Section**: Purple-themed section with AI insights
+- **Loading States**: Visual feedback during summary generation
+- **Error Handling**: User-friendly error messages and fallback displays
+- **Metadata Display**: Shows AI provider and generation timestamp
+
+### Interactive Features
+- **Real-time Loading**: Animated loading indicator during AI processing
+- **Regenerate Capability**: Ability to refresh summaries with updated data
+- **Conditional Rendering**: Smart display based on data availability
+- **Responsive Design**: Mobile-friendly layout for various screen sizes
+- **Accessibility**: Proper labeling and semantic HTML structure
+
+### Visual Design Elements
+- **Color Coding**: Blue for stored facts, purple for AI interpretations
+- **Clear Typography**: Hierarchical font sizing and weights
+- **Spacing and Layout**: Consistent padding and grid layouts
+- **Iconography**: Relevant icons for better user understanding
+- **Status Indicators**: Visual cues for different states and actions
+
+**Section sources**
+- [dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
+- [dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+
 ## Dependency Analysis
 The health summary endpoint depends on:
 - Authentication module for session validation.
 - Prisma client for data access.
 - AI provider abstraction for summarization.
 - Consistent error envelope across APIs.
+- **Enhanced Dashboard UI**: React state management, loading indicators, and error handling components.
 
 ```mermaid
 graph LR
@@ -208,16 +290,24 @@ HS --> PRISMA["Prisma Client"]
 HS --> AI["AI Provider"]
 PRISMA --> SCHEMA["PostgreSQL Schema"]
 AI --> LLM["External LLM"]
+UI["Dashboard UI"] --> STATE["React State"]
+STATE --> LOADING["Loading States"]
+STATE --> ERROR["Error Handling"]
+STATE --> DISPLAY["UI Components"]
 ```
 
 **Diagram sources**
 - [health-summary/route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+- [dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
 - [auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [db.ts:1-33](file://lib/db.ts#L1-L33)
 - [ai.ts:1-137](file://lib/ai.ts#L1-L137)
 
 **Section sources**
 - [health-summary/route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+- [dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
 - [ai.ts:1-137](file://lib/ai.ts#L1-L137)
 - [db.ts:1-33](file://lib/db.ts#L1-L33)
 - [auth.ts:1-125](file://lib/auth.ts#L1-L125)
@@ -227,11 +317,14 @@ AI --> LLM["External LLM"]
 - Connection pooling: Prisma configured with pg pool in production to manage connections efficiently.
 - AI provider fallback: Default provider includes fallback to mitigate rate limits or outages.
 - Data limiting: Queries limit recent records (e.g., top 10) to reduce payload size and processing time.
+- **Enhanced UI Performance**: Optimized React rendering with conditional updates and efficient state management.
 
 Recommendations:
 - Monitor AI provider latency and consider caching frequently accessed summaries with appropriate invalidation.
 - Add pagination for large datasets if needed.
 - Ensure indexes exist on frequently queried fields (e.g., petId, dateTime) — already present in schema.
+- **Implement lazy loading for large datasets in the dashboard UI.**
+- **Consider debouncing regenerate button clicks to prevent excessive API calls.**
 
 [No sources needed since this section provides general guidance]
 
@@ -242,18 +335,26 @@ Common issues and resolutions:
 - Not found: Confirm petId exists in the database.
 - AI summary missing: If AI parsing fails or provider errors occur, facts are still returned; check aiError field and logs.
 - Validation errors: For vaccination and medication creation, ensure dates are valid and constraints are met (e.g., due date after administered date).
+- **UI Loading Issues**: Check network connectivity and verify API endpoints are accessible.
+- **Error Display Problems**: Ensure proper error state handling in React components and verify error message formatting.
 
 Operational tips:
 - Inspect meta.provider and generatedAt to confirm which AI provider was used and when the summary was generated.
 - Use consistent error envelopes to handle failures uniformly in clients.
+- **Monitor React component state transitions and ensure proper cleanup of loading states.**
+- **Test error scenarios including network failures, API timeouts, and invalid responses.**
 
 **Section sources**
 - [health-summary/route.ts:193-205](file://app/api/pets/[petId]/health-summary/route.ts#L193-L205)
+- [dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+- [dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
 - [vaccinations/route.ts:82-118](file://app/api/pets/[petId]/vaccinations/route.ts#L82-L118)
 - [medications/route.ts:82-118](file://app/api/pets/[petId]/medications/route.ts#L82-L118)
 - [auth.ts:99-125](file://lib/auth.ts#L99-L125)
 
 ## Conclusion
-The Pet Health Summary API delivers a reliable, secure, and extensible way to aggregate a pet’s health records and provide actionable insights through AI. It separates factual data from AI-generated interpretations, enforces strict ownership controls, and remains resilient to external AI failures. With clear error handling, efficient data fetching, and pluggable AI providers, it forms a solid foundation for owner-facing health insights and vet preparation workflows.
+The Pet Health Summary API delivers a reliable, secure, and extensible way to aggregate a pet's health records and provide actionable insights through AI. It separates factual data from AI-generated interpretations, enforces strict ownership controls, and remains resilient to external AI failures. With clear error handling, efficient data fetching, and pluggable AI providers, it forms a solid foundation for owner-facing health insights and vet preparation workflows. **Enhanced with a comprehensive dashboard UI that provides an intuitive user experience with loading states, error handling, and visually distinct presentation of different data types.**
+
+The addition of the full dashboard implementation transforms the API from a backend-only service into a complete user-facing solution, making pet health information more accessible and actionable for pet owners while maintaining the robust security and reliability of the underlying API infrastructure.
 
 [No sources needed since this section summarizes without analyzing specific files]

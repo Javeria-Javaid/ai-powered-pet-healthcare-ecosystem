@@ -1,5 +1,5 @@
 'use client';
-import { PawPrint, Home, Users, Calendar, User, Settings, LogOut, Hand, Clock, Building2, Clipboard, RefreshCw, Bot, Shield, Pill, MessageCircle, X, Stethoscope, Bell, Search, MapPin, BadgeCheck } from 'lucide-react';
+import { PawPrint, Home, Users, Calendar, User, Settings, LogOut, Hand, Clock, Building2, Clipboard, RefreshCw, Bot, Shield, Pill, MessageCircle, X, Stethoscope, Bell, Search, MapPin, BadgeCheck, FileText, Trash2, Upload } from 'lucide-react';
 
 
 import { useState, useEffect, useRef } from 'react';
@@ -61,6 +61,11 @@ export default function Dashboard() {
   const [discoverLoading, setDiscoverLoading] = useState(false);
   const [discoverSearched, setDiscoverSearched] = useState(false);
 
+  // Medical Documents states (blueprint Section 13) — files in Supabase Storage, metadata in the DB
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const docFileInputRef = useRef<HTMLInputElement>(null);
+
   // AI Health Assistant States
   const [aiPetId, setAiPetId] = useState('');
   const [aiConversationId, setAiConversationId] = useState('');
@@ -112,6 +117,11 @@ export default function Dashboard() {
             if (medRes.ok) {
               const medData = await medRes.json();
               setMedications(medData.medications);
+            }
+            const docRes = await fetch(`/api/pets/${petsData.pets[0].id}/documents`);
+            if (docRes.ok) {
+              const docData = await docRes.json();
+              setDocuments(docData.documents);
             }
           }
         }
@@ -197,6 +207,7 @@ export default function Dashboard() {
     setTimeline([]);
     setVaccinations([]);
     setMedications([]);
+    setDocuments([]);
     setHealthSummary(null);
     try {
       const res = await fetch(`/api/pets/${pet.id}/timeline`);
@@ -213,6 +224,11 @@ export default function Dashboard() {
       if (medRes.ok) {
         const medData = await medRes.json();
         setMedications(medData.medications);
+      }
+      const docRes = await fetch(`/api/pets/${pet.id}/documents`);
+      if (docRes.ok) {
+        const docData = await docRes.json();
+        setDocuments(docData.documents);
       }
     } catch (err) {
       console.error('Failed to load timeline:', err);
@@ -258,6 +274,59 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error('Failed to refresh timeline:', err);
+    }
+  }
+
+  // Medical Documents (blueprint Section 13): uploads go through the owner-scoped API
+  // route, which stores the file in Supabase Storage and only metadata in the database.
+  async function loadDocuments(petId: string) {
+    try {
+      const res = await fetch(`/api/pets/${petId}/documents`);
+      if (res.ok) {
+        const data = await res.json();
+        setDocuments(data.documents);
+      }
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+    }
+  }
+
+  async function handleDocumentUpload(file: File) {
+    if (!selectedPet || uploadingDoc) return;
+    setUploadingDoc(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`/api/pets/${selectedPet.id}/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadDocuments(selectedPet.id);
+      } else {
+        alert(data.error?.message || 'Upload failed.');
+      }
+    } catch (err) {
+      alert('Connection error uploading document.');
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
+
+  async function handleDeleteDocument(documentId: string) {
+    if (!selectedPet) return;
+    if (!confirm('Delete this document?')) return;
+    try {
+      const res = await fetch(`/api/pets/${selectedPet.id}/documents/${documentId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setDocuments(documents.filter((d: any) => d.id !== documentId));
+      } else {
+        alert(data.error?.message || 'Delete failed.');
+      }
+    } catch (err) {
+      alert('Connection error deleting document.');
     }
   }
 
@@ -1289,6 +1358,66 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* Medical Documents (blueprint Section 13) — files stored in cloud storage, DB keeps metadata only */}
+                <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                  <div className="flex justify-between items-center mb-4">
+                    <h5 className="text-sm font-bold text-zinc-900 flex items-center gap-2"><FileText className="w-4 h-4 text-blue-600" /> Medical Documents</h5>
+                    <input
+                      ref={docFileInputRef}
+                      type="file"
+                      accept="application/pdf,image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleDocumentUpload(file);
+                        e.target.value = '';
+                      }}
+                    />
+                    <button
+                      onClick={() => docFileInputRef.current?.click()}
+                      disabled={uploadingDoc}
+                      className="flex items-center gap-1.5 rounded-full border border-blue-600 px-4 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 transition disabled:opacity-50"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      {uploadingDoc ? 'Uploading...' : '+ Upload Document'}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-zinc-400">
+                    Prescriptions, lab reports, vaccination certificates and diagnostic images (PDF, PNG, JPEG, WebP — up to 10 MB).
+                    Files are stored in cloud storage; view links are signed and expire after 1 hour.
+                  </p>
+                  {documents.length === 0 ? (
+                    <p className="text-xs text-zinc-400 italic py-4">No documents uploaded yet.</p>
+                  ) : (
+                    <div className="flex flex-col gap-3 mt-4">
+                      {documents.map((doc: any) => (
+                        <div key={doc.id} className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3.5 flex justify-between items-center gap-3">
+                          <div className="min-w-0 flex items-center gap-3">
+                            <FileText className="w-5 h-5 text-zinc-400 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-zinc-800 truncate flex items-center gap-2">
+                                {doc.fileName}
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-200 text-zinc-600 font-bold uppercase shrink-0">
+                                  {(doc.fileType || '').split('/')[1] || 'file'}
+                                </span>
+                              </p>
+                              <p className="text-[10px] text-zinc-400 mt-0.5">Uploaded {new Date(doc.createdAt).toLocaleDateString()} by {doc.uploaderName}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {doc.signedUrl && (
+                              <a href={doc.signedUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 font-semibold hover:underline">View</a>
+                            )}
+                            <button onClick={() => handleDeleteDocument(doc.id)} className="text-red-600 hover:text-red-700" title="Delete document">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* AI Health Summary (blueprint Section 19) — stored facts and AI interpretation are labeled distinctly */}
                 <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
                   <div className="flex justify-between items-center mb-4">
@@ -1863,7 +1992,7 @@ export default function Dashboard() {
               onClick={() => handleSendChatMessage(undefined, `What vaccinations does my pet have?`)}
               className="w-full text-left bg-[#fcfdfe] border border-zinc-200 rounded-xl p-3 text-[11px] font-semibold hover:bg-zinc-50   :bg-zinc-800 transition flex justify-between items-center"
             >
-              <span className="flex items-center gap-2"><Shield className="inline w-4 h-4" />️ What vaccinations does my pet have?</span>
+              <span className="flex items-center gap-2"><Shield className="inline w-4 h-4" /> What vaccinations does my pet have?</span>
               <span className="text-zinc-400">&gt;</span>
             </button>
             <button

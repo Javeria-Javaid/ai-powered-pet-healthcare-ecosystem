@@ -408,6 +408,82 @@ async function main() {
     check('Discovery test booking cancelled (cleanup)', discCancel.status === 200);
   }
 
+  console.log('=== TEST 7C: Medical Documents (blueprint Section 13) ===');
+  const docVet = await login('vet1@example.com', 'VetPass123!');
+
+  // 7C.1 Unauthenticated list is rejected
+  const docUnauth = await fetch(`${BASE}/api/pets/${petId}/documents`);
+  check('Documents list requires login (401)', docUnauth.status === 401, `Got ${docUnauth.status}`);
+
+  // 7C.2 Unknown pet returns 404
+  const docNotFound = await fetch(`${BASE}/api/pets/00000000-0000-0000-0000-000000000000/documents`, { headers: authed(owner.cookie) });
+  check('Documents for unknown pet return 404', docNotFound.status === 404, `Got ${docNotFound.status}`);
+
+  // 7C.3 Non-owner (vet) is forbidden from listing
+  const docVetList = await fetch(`${BASE}/api/pets/${petId}/documents`, { headers: authed(docVet.cookie) });
+  check('Vet cannot list owner documents (403)', docVetList.status === 403, `Got ${docVetList.status}`);
+
+  // 7C.4 Owner uploads a valid PDF (multipart)
+  const docUploadForm = new FormData();
+  docUploadForm.append('file', new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34])], { type: 'application/pdf' }), 'lab-report.pdf');
+  const docUploadRes = await fetch(`${BASE}/api/pets/${petId}/documents`, {
+    method: 'POST',
+    headers: { Cookie: owner.cookie },
+    body: docUploadForm,
+  });
+  const docUploadData = await docUploadRes.json();
+  check('Owner uploads a PDF document (201)', docUploadRes.status === 201 && docUploadData.success === true, JSON.stringify(docUploadData).slice(0, 200));
+
+  if (docUploadData.success) {
+    // 7C.5 List includes the upload with a signed URL and uploader name
+    const docListRes = await fetch(`${BASE}/api/pets/${petId}/documents`, { headers: authed(owner.cookie) });
+    const docListData = await docListRes.json();
+    const listedDoc = (docListData.documents || []).find((d) => d.id === docUploadData.document.id);
+    check('Documents list includes upload with signed URL', docListRes.status === 200 && !!listedDoc && listedDoc.fileName === 'lab-report.pdf' && !!listedDoc.signedUrl && !!listedDoc.uploaderName, JSON.stringify(docListData).slice(0, 200));
+
+    // 7C.6 The signed URL actually serves the stored file
+    if (listedDoc?.signedUrl) {
+      const docSignedRes = await fetch(listedDoc.signedUrl);
+      check('Signed URL serves the stored file (200)', docSignedRes.status === 200, `Got ${docSignedRes.status}`);
+    } else {
+      check('Signed URL serves the stored file (200)', false, 'No signed URL returned');
+    }
+
+    // 7C.7 Vet cannot delete the owner's document
+    const docVetDelete = await fetch(`${BASE}/api/pets/${petId}/documents/${docUploadData.document.id}`, { method: 'DELETE', headers: authed(docVet.cookie) });
+    check('Vet cannot delete owner document (403)', docVetDelete.status === 403, `Got ${docVetDelete.status}`);
+
+    // 7C.8 Owner deletes the document
+    const docDeleteRes = await fetch(`${BASE}/api/pets/${petId}/documents/${docUploadData.document.id}`, { method: 'DELETE', headers: authed(owner.cookie) });
+    const docDeleteData = await docDeleteRes.json();
+    check('Owner deletes document (200)', docDeleteRes.status === 200 && docDeleteData.success === true, JSON.stringify(docDeleteData).slice(0, 200));
+
+    // 7C.9 Deleted document is gone from the list
+    const docAfterListRes = await fetch(`${BASE}/api/pets/${petId}/documents`, { headers: authed(owner.cookie) });
+    const docAfterListData = await docAfterListRes.json();
+    check('Deleted document is removed from list', !(docAfterListData.documents || []).some((d) => d.id === docUploadData.document.id));
+
+    // 7C.10 Repeat delete returns 404
+    const docDeleteAgain = await fetch(`${BASE}/api/pets/${petId}/documents/${docUploadData.document.id}`, { method: 'DELETE', headers: authed(owner.cookie) });
+    check('Deleting again returns 404', docDeleteAgain.status === 404, `Got ${docDeleteAgain.status}`);
+  }
+
+  // 7C.11 Validation: unsupported file type is rejected
+  const docBadMimeForm = new FormData();
+  docBadMimeForm.append('file', new Blob([new Uint8Array([0x68, 0x69])], { type: 'text/plain' }), 'notes.txt');
+  const docBadMime = await fetch(`${BASE}/api/pets/${petId}/documents`, { method: 'POST', headers: { Cookie: owner.cookie }, body: docBadMimeForm });
+  check('Unsupported file type rejected (400)', docBadMime.status === 400, `Got ${docBadMime.status}`);
+
+  // 7C.12 Validation: missing file is rejected
+  const docNoFile = await fetch(`${BASE}/api/pets/${petId}/documents`, { method: 'POST', headers: { Cookie: owner.cookie }, body: new FormData() });
+  check('Upload without file rejected (400)', docNoFile.status === 400, `Got ${docNoFile.status}`);
+
+  // 7C.13 Validation: oversize file (11 MB) is rejected
+  const docOversizeForm = new FormData();
+  docOversizeForm.append('file', new Blob([Buffer.alloc(11 * 1024 * 1024)], { type: 'application/pdf' }), 'too-big.pdf');
+  const docOversize = await fetch(`${BASE}/api/pets/${petId}/documents`, { method: 'POST', headers: { Cookie: owner.cookie }, body: docOversizeForm });
+  check('Oversize file rejected (400)', docOversize.status === 400, `Got ${docOversize.status}`);
+
   console.log('=== TEST 8: Reschedule (slot options, owner-only, resets to REQUESTED) ===');
   const karachiFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' });
   const reschedBase = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000);

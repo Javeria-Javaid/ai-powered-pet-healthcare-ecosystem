@@ -17,18 +17,23 @@
 - [appointment detail route.ts](file://app/api/appointments/[appointmentId]/route.ts)
 - [appointment slots route.ts](file://app/api/appointments/[appointmentId]/slots/route.ts)
 - [clinic profile route.ts](file://app/api/clinic/profile/route.ts)
+- [health summary route.ts](file://app/api/pets/[petId]/health-summary/route.ts)
+- [veterinarian discovery route.ts](file://app/api/vet/discovery/route.ts)
+- [vaccinations route.ts](file://app/api/pets/[petId]/vaccinations/route.ts)
+- [medications route.ts](file://app/api/pets/[petId]/medications/route.ts)
 - [seed.js](file://prisma/seed.js)
 - [verify_handoff.js](file://verify_handoff.js)
 - [verify_dashboard_data.js](file://verify_dashboard_data.js)
+- [seed_tracking_demo.js](file://seed_tracking_demo.js)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive rescheduling test cases covering slot validation, permission checks, and working hours enforcement
-- Enhanced appointment endpoint testing with detailed reschedule workflow validation
-- Updated testing strategies for appointment management endpoints
-- Added new verification scripts for end-to-end rescheduling scenarios
-- Expanded authorization testing for reschedule operations
+- Added comprehensive verification suite covering 577 lines of automated testing including UTF-8 emoji persistence, past-date booking rejection, appointment cancellation flows, upcoming appointment queries, vaccination and medication tracking with automatic reminders, authorization controls, and validation of new health summary and veterinarian discovery features
+- Enhanced testing strategies for pet health endpoints with vaccination and medication tracking
+- Updated API endpoint documentation to include new health summary and veterinarian discovery routes
+- Expanded authentication and authorization testing coverage for cross-user access scenarios
+- Added detailed testing guidance for AI-powered health summary generation and veterinarian availability checking
 
 ## Table of Contents
 1. Introduction
@@ -43,7 +48,7 @@
 10. Appendices
 
 ## Introduction
-This document provides comprehensive integration testing guidance for the PETIVA application. It focuses on validating REST API endpoints, database operations with Prisma and PostgreSQL, and external service integrations such as Google OAuth and AI providers (Groq, Gemini, Qwen). It also covers end-to-end workflows like user registration via OAuth, pet profile creation with medical records, and appointment booking with availability checks. **Updated** to include comprehensive rescheduling test cases that validate slot availability, permission enforcement, and working hours constraints. Guidance is included for test environment setup, mocking strategies, authentication and authorization testing, and best practices for isolation, cleanup, and performance.
+This document provides comprehensive integration testing guidance for the PETIVA application. It focuses on validating REST API endpoints, database operations with Prisma and PostgreSQL, and external service integrations such as Google OAuth and AI providers (Groq, Gemini, Qwen). It also covers end-to-end workflows like user registration via OAuth, pet profile creation with medical records, and appointment booking with availability checks. **Updated** to include comprehensive verification suites covering UTF-8 emoji persistence, past-date booking rejection, appointment cancellation flows, upcoming appointment queries, vaccination and medication tracking with automatic reminders, authorization controls, and validation of new health summary and veterinarian discovery features. Guidance is included for test environment setup, mocking strategies, authentication and authorization testing, and best practices for isolation, cleanup, and performance.
 
 ## Project Structure
 The application uses Next.js API routes under app/api, a Prisma schema defining the data model, shared libraries for database access and authentication, and an AI orchestration layer that integrates multiple LLM providers. A seed script populates realistic test data, and comprehensive verification scripts demonstrate direct API interactions useful for integration tests.
@@ -61,6 +66,10 @@ R7["/api/appointments"]
 R8["/api/appointments/[id]"]
 R9["/api/appointments/[id]/slots"]
 R10["/api/clinic/profile"]
+R11["/api/pets/[petId]/health-summary"]
+R12["/api/vet/discovery"]
+R13["/api/pets/[petId]/vaccinations"]
+R14["/api/pets/[petId]/medications"]
 end
 subgraph "Libraries"
 L1["lib/auth.ts"]
@@ -80,6 +89,7 @@ end
 subgraph "Verification Scripts"
 V1["verify_handoff.js"]
 V2["verify_dashboard_data.js"]
+V3["seed_tracking_demo.js"]
 end
 R1 --> L1
 R2 --> L1
@@ -91,6 +101,10 @@ R7 --> L1
 R8 --> L1
 R9 --> L1
 R10 --> L1
+R11 --> L1
+R12 --> L1
+R13 --> L1
+R14 --> L1
 L1 --> L2
 L2 --> PRISMA
 PRISMA --> DB
@@ -101,7 +115,13 @@ L3 --> A3
 V1 --> R7
 V1 --> R8
 V1 --> R9
+V1 --> R11
+V1 --> R12
+V1 --> R13
+V1 --> R14
 V2 --> R7
+V3 --> R13
+V3 --> R14
 ```
 
 **Diagram sources**
@@ -115,11 +135,16 @@ V2 --> R7
 - [appointment detail route.ts:1-242](file://app/api/appointments/[appointmentId]/route.ts#L1-L242)
 - [appointment slots route.ts:1-117](file://app/api/appointments/[appointmentId]/slots/route.ts#L1-L117)
 - [clinic profile route.ts:1-95](file://app/api/clinic/profile/route.ts#L1-L95)
+- [health summary route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [veterinarian discovery route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
+- [vaccinations route.ts:1-156](file://app/api/pets/[petId]/vaccinations/route.ts#L1-L156)
+- [medications route.ts:1-158](file://app/api/pets/[petId]/medications/route.ts#L1-L158)
 - [auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [db.ts:1-33](file://lib/db.ts#L1-L33)
 - [ai.ts:1-467](file://lib/ai.ts#L1-L467)
-- [verify_handoff.js:1-352](file://verify_handoff.js#L1-L352)
+- [verify_handoff.js:1-577](file://verify_handoff.js#L1-L577)
 - [verify_dashboard_data.js:1-39](file://verify_dashboard_data.js#L1-L39)
+- [seed_tracking_demo.js:1-74](file://seed_tracking_demo.js#L1-L74)
 
 **Section sources**
 - [package.json:1-35](file://package.json#L1-L35)
@@ -129,8 +154,8 @@ V2 --> R7
 - Authentication and session management: password hashing, session token lifecycle, cookie handling, role-based access control helpers.
 - Database layer: Prisma client with pg adapter, connection pooling, and environment-aware initialization.
 - AI orchestration: provider selection, tool execution, and fallback strategy across Groq, Gemini, and Qwen.
-- API routes: REST endpoints for auth, pets, appointments, and clinic management with consistent error handling and authorization.
-- **Enhanced Verification Scripts**: Comprehensive test suites for rescheduling workflows including slot validation, permission checks, and working hours enforcement.
+- API routes: REST endpoints for auth, pets, appointments, clinic management, health summaries, and veterinarian discovery with consistent error handling and authorization.
+- **Enhanced Verification Scripts**: Comprehensive test suites covering 577 lines of automated testing including UTF-8 emoji persistence, past-date booking rejection, appointment cancellation flows, upcoming appointment queries, vaccination and medication tracking with automatic reminders, authorization controls, and validation of new health summary and veterinarian discovery features.
 
 Key responsibilities and relationships are implemented across lib/auth.ts, lib/db.ts, lib/ai.ts, the API routes listed above, and the verification scripts.
 
@@ -148,11 +173,15 @@ Key responsibilities and relationships are implemented across lib/auth.ts, lib/d
 - [appointment detail route.ts:1-242](file://app/api/appointments/[appointmentId]/route.ts#L1-L242)
 - [appointment slots route.ts:1-117](file://app/api/appointments/[appointmentId]/slots/route.ts#L1-L117)
 - [clinic profile route.ts:1-95](file://app/api/clinic/profile/route.ts#L1-L95)
-- [verify_handoff.js:1-352](file://verify_handoff.js#L1-L352)
+- [health summary route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [veterinarian discovery route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
+- [vaccinations route.ts:1-156](file://app/api/pets/[petId]/vaccinations/route.ts#L1-L156)
+- [medications route.ts:1-158](file://app/api/pets/[petId]/medications/route.ts#L1-L158)
+- [verify_handoff.js:1-577](file://verify_handoff.js#L1-L577)
 - [verify_dashboard_data.js:1-39](file://verify_dashboard_data.js#L1-L39)
 
 ## Architecture Overview
-Integration tests should validate the full request/response cycle including authentication, authorization, database transactions, and external calls. The following diagram maps the primary flows used by integration tests, **including the enhanced rescheduling workflow**.
+Integration tests should validate the full request/response cycle including authentication, authorization, database transactions, and external calls. The following diagram maps the primary flows used by integration tests, **including the enhanced verification suite covering health summaries, veterinarian discovery, and comprehensive appointment workflows**.
 
 ```mermaid
 sequenceDiagram
@@ -190,11 +219,18 @@ AI-->>API : Tool calls or content
 API->>DB : executeTool queries (e.g., check_slots, create_booking)
 DB-->>API : Results
 API-->>T : Final response
-T->>API : PUT /api/appointments/ : id (RESCHEDULE)
-API->>AUTH : requireAuth(), role check
-API->>DB : Validate ownership, working hours, conflicts
-DB-->>API : Validation results
-API-->>T : Reschedule result (REQUESTED status)
+T->>API : GET /api/pets/[petId]/health-summary
+API->>AUTH : requireAuth(), ownership check
+API->>DB : Fetch pet health data
+DB-->>API : Health records
+API->>AI : Generate summary from health data
+AI-->>API : AI-generated summary
+API-->>T : Health summary with facts
+T->>API : GET /api/vet/discovery?date=YYYY-MM-DD
+API->>AUTH : requireAuth()
+API->>DB : Query vets with availability
+DB-->>API : Vet availability data
+API-->>T : Veterinarian discovery results
 ```
 
 **Diagram sources**
@@ -206,6 +242,8 @@ API-->>T : Reschedule result (REQUESTED status)
 - [appointments route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
 - [appointment detail route.ts:1-242](file://app/api/appointments/[appointmentId]/route.ts#L1-L242)
 - [appointment slots route.ts:1-117](file://app/api/appointments/[appointmentId]/slots/route.ts#L1-L117)
+- [health summary route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [veterinarian discovery route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
 - [auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [ai.ts:1-467](file://lib/ai.ts#L1-L467)
 
@@ -280,6 +318,7 @@ Testing strategies:
 - Ownership checks must return 403 when accessing another user's pet.
 - Validation errors must return 400 with appropriate messages.
 - Successful operations must return expected entities and status codes.
+- **UTF-8 Emoji Persistence**: Verify that pet names with emojis (like "Löna 🐕") are properly stored and retrieved without encoding issues.
 
 ```mermaid
 flowchart TD
@@ -312,6 +351,8 @@ Testing strategies:
 - Role-based visibility: ensure each role sees only permitted appointments.
 - Double booking prevention: assert 409 conflict when attempting to book an already requested or confirmed slot.
 - Transactional integrity: confirm atomicity of conflict check and creation.
+- **Past Date Rejection**: Ensure appointments cannot be created for past dates.
+- **Cancellation Flow**: Verify soft-cancel functionality where appointments can be cancelled but remain in the database.
 
 ```mermaid
 sequenceDiagram
@@ -401,6 +442,143 @@ Testing strategies:
 **Section sources**
 - [clinic profile route.ts:1-95](file://app/api/clinic/profile/route.ts#L1-L95)
 
+### Health Summary Endpoint
+**New** The health summary endpoint provides AI-powered analysis of pet health data:
+
+- **Authentication Required**: Requires authenticated user with proper ownership
+- **Health Data Aggregation**: Combines medical records, vaccinations, medications, allergies, conditions, metrics, and appointments
+- **AI-Powered Analysis**: Generates concise health overview, recurring concerns, observations, and topics for veterinary discussion
+- **Graceful Fallback**: Returns stored facts even if AI processing fails
+- **Emoji Safety**: Ensures AI-generated content contains no emojis or special symbols
+
+Testing strategies:
+- Verify unauthenticated access returns 401
+- Test ownership validation returns 403 for non-owners
+- Validate NOT_FOUND for non-existent pets
+- Assert AI summary structure includes overview, topicsForVet, recurringConcerns, and observations
+- Verify stored facts contain counts and structured health data
+- Test graceful degradation when AI provider is unavailable
+
+```mermaid
+sequenceDiagram
+participant Test as "Integration Test"
+participant HS as "/api/pets/[petId]/health-summary"
+participant Auth as "requireAuth()"
+participant DB as "Prisma + PostgreSQL"
+participant AI as "AI Provider"
+Test->>HS : GET (with auth)
+HS->>Auth : Validate user
+Auth->>DB : Find pet and verify ownership
+DB-->>Auth : Pet data
+Auth-->>HS : Authorized user
+HS->>DB : Fetch health records (medical, vaccinations, medications, etc.)
+DB-->>HS : Health data
+HS->>AI : Generate summary from health facts
+AI-->>HS : AI summary or error
+HS-->>Test : Health summary with facts and metadata
+```
+
+**Diagram sources**
+- [health summary route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+
+**Section sources**
+- [health summary route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+
+### Veterinarian Discovery Endpoint
+**New** The veterinarian discovery endpoint enables pet owners to find available veterinarians:
+
+- **Authentication Required**: Requires authenticated user
+- **Advanced Filtering**: Supports name, specialization, clinic, and location searches
+- **Availability Checking**: Provides free slots for specific dates based on working hours (9 AM - 5 PM Karachi time)
+- **Rich Metadata**: Returns distinct specializations and clinics for stable filter dropdowns
+- **Date Validation**: Rejects invalid or past dates with proper error codes
+
+Testing strategies:
+- Verify unauthenticated access returns 401
+- Test various search combinations (name, specialization, clinic, location)
+- Validate availability calculation excludes booked REQUESTED/CONFIRMED appointments
+- Assert working hours enforcement (9 AM - 5 PM Karachi timezone)
+- Test date validation rejects invalid formats and past dates
+- Verify meta information includes distinct specializations and clinics
+
+```mermaid
+sequenceDiagram
+participant Test as "Integration Test"
+participant Disc as "/api/vet/discovery"
+participant Auth as "requireAuth()"
+participant DB as "Prisma + PostgreSQL"
+Test->>Disc : GET ?name=&specialization=&clinic=&location=&date=
+Disc->>Auth : Validate user
+Auth-->>Disc : Authorized user
+Disc->>DB : Query vets with filters
+DB-->>Disc : Matching veterinarians
+alt With availability date
+Disc->>DB : Check booked appointments for date
+DB-->>Disc : Busy slots
+Disc->>DB : Calculate free slots (9AM-5PM)
+DB-->>Disc : Available slots
+end
+Disc-->>Test : Veterinarians with availability and metadata
+```
+
+**Diagram sources**
+- [veterinarian discovery route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
+
+**Section sources**
+- [veterinarian discovery route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
+
+### Vaccination and Medication Tracking
+**New** Enhanced pet health tracking with automatic reminder generation:
+
+- **Vaccination Records**: Track vaccine names, administered dates, due dates, and veterinarians
+- **Medication Courses**: Record medication names, dosages, frequencies, start/end dates, and status
+- **Automatic Reminders**: Generate reminders for upcoming vaccinations and medication end dates
+- **Authorization Controls**: Owner-only access with strict ownership validation
+- **Validation Rules**: Enforce date constraints, required fields, and business logic
+
+Testing strategies:
+- Verify owner-only access for creating vaccination and medication records
+- Test date validation (future dates rejected, due dates after administered dates)
+- Assert automatic reminder creation when due dates or end dates are specified
+- Validate cross-user authorization prevents access to other users' pets
+- Test reminder listing and deletion functionality
+- Verify proper error responses for invalid data
+
+```mermaid
+sequenceDiagram
+participant Test as "Integration Test"
+participant Vac as "/api/pets/[petId]/vaccinations"
+participant Med as "/api/pets/[petId]/medications"
+participant Auth as "requireAuth()"
+participant DB as "Prisma + PostgreSQL"
+Test->>Vac : POST vaccination record
+Vac->>Auth : Validate owner
+Auth->>DB : Verify pet ownership
+DB-->>Auth : Ownership confirmed
+Vac->>DB : Create vaccination record
+alt Due date provided
+Vac->>DB : Create reminder for due date
+end
+Vac-->>Test : Vaccination with reminder
+Test->>Med : POST medication course
+Med->>Auth : Validate owner
+Auth->>DB : Verify pet ownership
+DB-->>Auth : Ownership confirmed
+Med->>DB : Create medication record
+alt End date provided
+Med->>DB : Create reminder for end date
+end
+Med-->>Test : Medication with reminder
+```
+
+**Diagram sources**
+- [vaccinations route.ts:1-156](file://app/api/pets/[petId]/vaccinations/route.ts#L1-L156)
+- [medications route.ts:1-158](file://app/api/pets/[petId]/medications/route.ts#L1-L158)
+
+**Section sources**
+- [vaccinations route.ts:1-156](file://app/api/pets/[petId]/vaccinations/route.ts#L1-L156)
+- [medications route.ts:1-158](file://app/api/pets/[petId]/medications/route.ts#L1-L158)
+
 ### External Service Integrations
 
 #### Google OAuth Flow
@@ -444,28 +622,37 @@ Content --> End
 
 ### Enhanced Verification Scripts
 
-#### Comprehensive Rescheduling Test Suite
-**New** The `verify_handoff.js` script provides comprehensive testing for rescheduling workflows:
+#### Comprehensive Test Suite (577 Lines)
+**New** The `verify_handoff.js` script provides comprehensive testing covering all major application features:
 
-- **Slot Validation Tests**: Validates date format, past date rejection, and working hours enforcement
-- **Permission Checks**: Ensures only pet owners can access reschedule slots and perform rescheduling
-- **Working Hours Enforcement**: Tests 9 AM - 5 PM Karachi timezone restrictions
-- **Conflict Detection**: Verifies double booking prevention during reschedule
-- **Status Management**: Confirms appointment status resets to REQUESTED after reschedule
-- **Audit Trail**: Validates that reschedule actions are properly logged
+- **UTF-8 Emoji Persistence**: Tests that pet names with emojis (like "Löna 🐕") are properly stored and retrieved
+- **Past Date Booking Rejection**: Ensures appointments cannot be created for past dates
+- **Appointment Cancellation Flow**: Validates soft-cancel functionality where appointments remain in database
+- **Upcoming Appointment Queries**: Verifies REQUESTED and CONFIRMED appointments appear in owner lists
+- **Vaccination Tracking**: Tests vaccination record creation with automatic reminder generation
+- **Medication Tracking**: Validates medication course recording with end date reminders
+- **Authorization Controls**: Confirms cross-user access is properly blocked (403 FORBIDDEN)
+- **Health Summary Validation**: Tests AI-powered health summary generation with proper error handling
+- **Veterinarian Discovery**: Validates search, filtering, and availability checking functionality
+- **Rescheduling Workflows**: Comprehensive testing of appointment rescheduling with slot validation, permission checks, and working hours enforcement
 
 #### Dashboard Data Verification
 **New** The `verify_dashboard_data.js` script validates that seeded data is correctly served through APIs for different user roles.
 
+#### Tracking Demo Script
+**New** The `seed_tracking_demo.js` script provides one-time demo data seeding for vaccination and medication tracking.
+
 Testing strategies:
 - Run against live development server to validate end-to-end workflows
 - Test cross-user authorization boundaries
-- Verify timezone handling for working hours validation
+- Verify timezone handling for working hours validation (Karachi UTC+5)
 - Validate appointment status transitions and data consistency
+- Test AI provider fallback when health summary generation fails
 
 **Section sources**
-- [verify_handoff.js:1-352](file://verify_handoff.js#L1-L352)
+- [verify_handoff.js:1-577](file://verify_handoff.js#L1-L577)
 - [verify_dashboard_data.js:1-39](file://verify_dashboard_data.js#L1-L39)
+- [seed_tracking_demo.js:1-74](file://seed_tracking_demo.js#L1-L74)
 
 ### End-to-End Workflows
 
@@ -476,10 +663,15 @@ Testing strategies:
 #### Pet Profile Creation with Medical Records
 - Steps: register/login user, create pet via /api/pets, optionally create related records (vaccinations, medications, allergies, conditions, metrics) through AI tool flows or direct DB seeding.
 - Assertions: pet created with correct ownerId, related records exist, timeline queries return expected data.
+- **Enhanced**: Test UTF-8 emoji persistence in pet names and verify proper character encoding throughout the system.
 
 #### Enhanced Appointment Booking and Rescheduling with Availability Checking
-**Updated** Steps: authenticate as pet owner, call /api/appointments POST with valid data, assert 201 created; attempt duplicate booking to assert 409 conflict; list appointments to verify inclusion; **test rescheduling workflow with slot validation, permission checks, and working hours enforcement**.
-- Assertions: conflict detection works, role-based listing returns correct subsets, timestamps and statuses are correct; **rescheduling validates permissions, working hours, and availability**.
+**Updated** Steps: authenticate as pet owner, call /api/appointments POST with valid data, assert 201 created; attempt duplicate booking to assert 409 conflict; list appointments to verify inclusion; **test rescheduling workflow with slot validation, permission checks, and working hours enforcement**; **validate past-date booking rejection and cancellation flows**.
+- Assertions: conflict detection works, role-based listing returns correct subsets, timestamps and statuses are correct; **rescheduling validates permissions, working hours, and availability**; **past dates are properly rejected**.
+
+#### Health Summary and Veterinarian Discovery Workflows
+**New** Steps: authenticate as pet owner, create vaccination and medication records, call /api/pets/[petId]/health-summary to generate AI-powered summary, use /api/vet/discovery to find available veterinarians with date-specific availability.
+- Assertions: health summary includes structured facts and AI-generated content; veterinarian discovery returns filtered results with availability data; proper authorization controls prevent unauthorized access.
 
 [No sources needed since this section synthesizes previously analyzed components]
 
@@ -489,7 +681,7 @@ The application's integration surface depends on:
 - Shared libraries for authentication and database access.
 - Prisma client configured with PostgreSQL adapter and connection pooling.
 - External services for OAuth and AI providers.
-- **Enhanced verification scripts for comprehensive testing coverage**.
+- **Enhanced verification scripts for comprehensive testing coverage including 577 lines of automated testing**.
 
 ```mermaid
 graph LR
@@ -507,16 +699,18 @@ Scripts --> DB
 - [db.ts:1-33](file://lib/db.ts#L1-L33)
 - [auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [ai.ts:1-467](file://lib/ai.ts#L1-L467)
-- [verify_handoff.js:1-352](file://verify_handoff.js#L1-L352)
+- [verify_handoff.js:1-577](file://verify_handoff.js#L1-L577)
 - [verify_dashboard_data.js:1-39](file://verify_dashboard_data.js#L1-L39)
+- [seed_tracking_demo.js:1-74](file://seed_tracking_demo.js#L1-L74)
 
 **Section sources**
 - [package.json:1-35](file://package.json#L1-L35)
 - [db.ts:1-33](file://lib/db.ts#L1-L33)
 - [auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [ai.ts:1-467](file://lib/ai.ts#L1-L467)
-- [verify_handoff.js:1-352](file://verify_handoff.js#L1-L352)
+- [verify_handoff.js:1-577](file://verify_handoff.js#L1-L577)
 - [verify_dashboard_data.js:1-39](file://verify_dashboard_data.js#L1-L39)
+- [seed_tracking_demo.js:1-74](file://seed_tracking_demo.js#L1-L74)
 
 ## Performance Considerations
 - Use a dedicated test database per test suite run to avoid contention and enable parallelism where safe.
@@ -524,7 +718,8 @@ Scripts --> DB
 - Minimize external calls by mocking AI providers and OAuth verification in tests to reduce flakiness and latency.
 - Reuse authenticated sessions within a test scenario to reduce overhead.
 - Batch operations where possible (e.g., seeding related entities) to reduce round trips.
-- **Optimize rescheduling tests**: Cache slot availability data and minimize repeated API calls during comprehensive test suites.
+- **Optimize comprehensive test suites**: Cache slot availability data and minimize repeated API calls during the 577-line verification suite.
+- **Efficient AI testing**: Mock AI provider calls for health summary and veterinarian discovery endpoints to avoid network dependencies.
 
 [No sources needed since this section provides general guidance]
 
@@ -536,15 +731,20 @@ Common issues and how to address them in integration tests:
 - AI provider failures: implement retries or fallbacks in tests; assert graceful degradation when providers are unavailable.
 - Authorization errors: verify cookies/tokens are correctly passed and sessions are validated; assert 401/403 responses for unauthorized/forbidden scenarios.
 - **Rescheduling test failures**: Verify timezone handling for Karachi (UTC+5), ensure working hours validation matches business rules, and confirm proper error codes for different failure scenarios.
+- **Health summary test failures**: Handle AI provider unavailability gracefully and verify stored facts are still returned when AI processing fails.
+- **Veterinarian discovery issues**: Ensure proper timezone handling for availability calculations and verify date validation for past dates.
+- **Emoji encoding problems**: Verify UTF-8 database configuration and proper character encoding throughout the request/response pipeline.
 
 **Section sources**
 - [seed.js:1-430](file://prisma/seed.js#L1-L430)
 - [google callback route.ts:1-98](file://app/api/auth/google/callback/route.ts#L1-L98)
 - [ai.ts:1-467](file://lib/ai.ts#L1-L467)
-- [verify_handoff.js:1-352](file://verify_handoff.js#L1-L352)
+- [verify_handoff.js:1-577](file://verify_handoff.js#L1-L577)
+- [health summary route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [veterinarian discovery route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
 
 ## Conclusion
-Robust integration tests for PETIVA should cover authentication, authorization, database transactions, and external service interactions. By leveraging the provided API routes, shared libraries, Prisma schema, seed data, **and enhanced verification scripts**, you can build reliable tests that validate critical workflows such as OAuth login, pet management, and appointment booking with availability checks. **The comprehensive rescheduling test suite ensures thorough validation of slot availability, permission enforcement, and working hours constraints.** Mocking external services and isolating test databases will improve stability and speed while ensuring correctness across the system.
+Robust integration tests for PETIVA should cover authentication, authorization, database transactions, and external service interactions. By leveraging the provided API routes, shared libraries, Prisma schema, seed data, **and comprehensive verification scripts covering 577 lines of automated testing**, you can build reliable tests that validate critical workflows such as OAuth login, pet management, appointment booking with availability checks, health summary generation, and veterinarian discovery. **The enhanced verification suite ensures thorough validation of UTF-8 emoji persistence, past-date booking rejection, appointment cancellation flows, upcoming appointment queries, vaccination and medication tracking with automatic reminders, authorization controls, and validation of new health summary and veterinarian discovery features.** Mocking external services and isolating test databases will improve stability and speed while ensuring correctness across the system.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -561,13 +761,15 @@ Robust integration tests for PETIVA should cover authentication, authorization, 
   - Use seed.js to populate clinics, users, veterinarians, pets, appointments, medical records, and related entities.
   - For additional ad-hoc data, reference patterns in verification scripts to create minimal fixtures.
 - **Enhanced Verification Scripts**:
-  - Run `verify_handoff.js` against live development server for comprehensive rescheduling workflow testing.
+  - Run `verify_handoff.js` against live development server for comprehensive testing covering 577 lines of automated scenarios.
   - Use `verify_dashboard_data.js` to validate dashboard data presentation across different user roles.
+  - Utilize `seed_tracking_demo.js` to seed vaccination and medication tracking data for demonstration purposes.
 
 **Section sources**
 - [seed.js:1-430](file://prisma/seed.js#L1-L430)
-- [verify_handoff.js:1-352](file://verify_handoff.js#L1-L352)
+- [verify_handoff.js:1-577](file://verify_handoff.js#L1-L577)
 - [verify_dashboard_data.js:1-39](file://verify_dashboard_data.js#L1-L39)
+- [seed_tracking_demo.js:1-74](file://seed_tracking_demo.js#L1-L74)
 - [google callback route.ts:1-98](file://app/api/auth/google/callback/route.ts#L1-L98)
 
 ### Authentication and Authorization Testing Checklist
@@ -576,11 +778,12 @@ Robust integration tests for PETIVA should cover authentication, authorization, 
 - Valid login/registration sets session cookie and allows subsequent authenticated requests.
 - Role-based endpoints enforce restrictions (e.g., clinic profile requires CLINIC_ADMIN).
 - Ownership checks prevent cross-user access (e.g., pet detail/update/delete).
-- **Enhanced Rescheduling Authorization**:
-  - Only PET_OWNER role can reschedule appointments
-  - Users can only reschedule their own appointments (not others')
-  - Non-owners attempting reschedule receive 403 FORBIDDEN
-  - Cross-owner reschedule attempts are properly blocked
+- **Enhanced Authorization Coverage**:
+  - Health summary endpoint requires proper ownership validation
+  - Veterinarian discovery requires authentication
+  - Vaccination and medication endpoints enforce owner-only access
+  - Cross-user access attempts return 403 FORBIDDEN
+  - Appointment rescheduling restricted to pet owners only
 
 **Section sources**
 - [auth.ts:1-125](file://lib/auth.ts#L1-L125)
@@ -589,6 +792,10 @@ Robust integration tests for PETIVA should cover authentication, authorization, 
 - [clinic profile route.ts:1-95](file://app/api/clinic/profile/route.ts#L1-L95)
 - [pet detail route.ts:1-141](file://app/api/pets/[petId]/route.ts#L1-L141)
 - [appointment detail route.ts:17-42](file://app/api/appointments/[appointmentId]/route.ts#L17-L42)
+- [health summary route.ts:37-52](file://app/api/pets/[petId]/health-summary/route.ts#L37-L52)
+- [veterinarian discovery route.ts:24-26](file://app/api/vet/discovery/route.ts#L24-L26)
+- [vaccinations route.ts:59-78](file://app/api/pets/[petId]/vaccinations/route.ts#L59-L78)
+- [medications route.ts:59-78](file://app/api/pets/[petId]/medications/route.ts#L59-L78)
 
 ### Best Practices for Integration Tests
 - Isolation:
@@ -608,5 +815,8 @@ Robust integration tests for PETIVA should cover authentication, authorization, 
   - Validate all error codes and messages for rescheduling operations
   - Ensure comprehensive coverage of permission and authorization scenarios
   - Test edge cases like same-time reschedule attempts and cancelled appointment rescheduling
+  - Verify UTF-8 emoji persistence throughout the system
+  - Test AI provider fallback mechanisms for health summary generation
+  - Validate veterinarian discovery availability calculations with proper timezone handling
 
 [No sources needed since this section provides general guidance]

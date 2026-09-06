@@ -3,6 +3,8 @@
 <cite>
 **Referenced Files in This Document**
 - [app/dashboard/page.tsx](file://app/dashboard/page.tsx)
+- [app/api/pets/[petId]/health-summary/route.ts](file://app/api/pets/[petId]/health-summary/route.ts)
+- [app/api/vet/discovery/route.ts](file://app/api/vet/discovery/route.ts)
 - [app/api/appointments/[appointmentId]/slots/route.ts](file://app/api/appointments/[appointmentId]/slots/route.ts)
 - [app/api/appointments/[appointmentId]/route.ts](file://app/api/appointments/[appointmentId]/route.ts)
 - [app/components/ChatWidget.tsx](file://app/components/ChatWidget.tsx)
@@ -26,12 +28,12 @@
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive health reminders section with due date tracking and clearance functionality
-- Implemented vaccination and medication forms with automatic reminder generation
-- Enhanced pet selection improvements with better visual indicators and status management
-- Updated timeline display with health activities including vaccinations, medications, and appointments
-- Integrated real-time reminder refresh system that updates after vaccination and medication additions
-- Added due date calculation helpers for consistent badge styling across all health tracking features
+- Added comprehensive AI Health Summary section with stored health facts and AI-generated interpretations
+- Implemented Veterinarian Discovery tab with advanced search capabilities including name, specialization, clinic, location, and availability filtering
+- Enhanced navigation with discover tab integration alongside existing dashboard tabs
+- Improved appointment dropdown formatting for better user experience
+- Added responsive design considerations for new feature sections across desktop, tablet, and mobile devices
+- Integrated server-side veterinarian discovery API with real-time availability checking
 
 ## Table of Contents
 1. Introduction
@@ -47,7 +49,7 @@
 ## Introduction
 This document explains the Pet Owner Dashboard in PETIVA, focusing on the main dashboard interface, pet portfolio management, appointment booking and rescheduling workflow, integrated AI health assistant chat, profile management, responsive design patterns, data fetching strategies, state management, and error handling. It is designed for both technical and non-technical readers to understand how the dashboard works end-to-end.
 
-**Updated** The dashboard now features an enhanced health reminders system with comprehensive vaccination and medication tracking, providing users with proactive health management capabilities through automated reminder generation and due date monitoring.
+**Updated** The dashboard now features an enhanced health reminders system with comprehensive vaccination and medication tracking, plus a new AI Health Summary section that provides structured health overviews with both stored facts and AI-generated interpretations, and a Veterinarian Discovery tab with advanced search capabilities for finding available veterinarians based on multiple criteria.
 
 ## Project Structure
 The dashboard is implemented as a Next.js client component with server-side API routes for data operations. The root layout sets global styles and metadata. Tailwind CSS provides responsive utilities across devices.
@@ -73,6 +75,8 @@ MSG_API["Messages API<br/>app/api/conversations/[conversationId]/messages/route.
 READ_API["Read Status API<br/>app/api/conversations/[conversationId]/read/route.ts"]
 REMINDERS["Reminders API<br/>app/api/reminders/route.ts"]
 REMINDER_DELETE["Reminder Delete API<br/>app/api/reminders/[reminderId]/route.ts"]
+HEALTH_SUMMARY["Health Summary API<br/>app/api/pets/[petId]/health-summary/route.ts"]
+VET_DISCOVERY["Vet Discovery API<br/>app/api/vet/discovery/route.ts"]
 end
 subgraph "Auth & Data"
 AUTH["Auth Utilities<br/>lib/auth.ts"]
@@ -91,6 +95,8 @@ D --> MSG_API
 D --> READ_API
 D --> REMINDERS
 D --> REMINDER_DELETE
+D --> HEALTH_SUMMARY
+D --> VET_DISCOVERY
 W --> AICHAT
 VC --> MSG_API
 VC --> READ_API
@@ -107,6 +113,8 @@ MSG_API --> AUTH
 READ_API --> AUTH
 REMINDERS --> AUTH
 REMINDER_DELETE --> AUTH
+HEALTH_SUMMARY --> AUTH
+VET_DISCOVERY --> AUTH
 PETS --> SCHEMA
 APPTS --> SCHEMA
 APPT_UPDATE --> SCHEMA
@@ -120,10 +128,12 @@ MSG_API --> SCHEMA
 READ_API --> SCHEMA
 REMINDERS --> SCHEMA
 REMINDER_DELETE --> SCHEMA
+HEALTH_SUMMARY --> SCHEMA
+VET_DISCOVERY --> SCHEMA
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:1-1985](file://app/dashboard/page.tsx#L1-L1985)
+- [app/dashboard/page.tsx:1-2358](file://app/dashboard/page.tsx#L1-L2358)
 - [app/components/ChatWidget.tsx:1-149](file://app/components/ChatWidget.tsx#L1-L149)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
@@ -139,6 +149,8 @@ REMINDER_DELETE --> SCHEMA
 - [app/api/conversations/[conversationId]/read/route.ts:1-49](file://app/api/conversations/[conversationId]/read/route.ts#L1-L49)
 - [app/api/reminders/route.ts:1-30](file://app/api/reminders/route.ts#L1-L30)
 - [app/api/reminders/[reminderId]/route.ts:1-46](file://app/api/reminders/[reminderId]/route.ts#L1-L46)
+- [app/api/pets/[petId]/health-summary/route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [app/api/vet/discovery/route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [prisma/schema.prisma:1-312](file://prisma/schema.prisma#L1-L312)
 
@@ -147,21 +159,21 @@ REMINDER_DELETE --> SCHEMA
 - [app/globals.css:1-20](file://app/globals.css#L1-L20)
 
 ## Core Components
-- Dashboard page: Central UI for health overview, upcoming appointments, pet profiles, quick actions, and navigation between tabs (dashboard, pets, appointments, AI assistant, chat, profile).
+- Dashboard page: Central UI for health overview, upcoming appointments, pet profiles, quick actions, and navigation between tabs (dashboard, pets, appointments, discover, AI assistant, chat, profile).
 - Chat widget: Floating assistant for general platform help; separate from the pet-specific AI assistant in the dashboard.
 - VetChatInterface: Dedicated component for real-time conversation between pet owners and veterinarians with message polling and read status tracking.
-- API routes: Secure endpoints for pets, appointments, profile updates, pet timeline aggregation, AI chat with streaming responses, comprehensive conversation management, and health reminders.
+- API routes: Secure endpoints for pets, appointments, profile updates, pet timeline aggregation, AI chat with streaming responses, comprehensive conversation management, health reminders, AI health summaries, and veterinarian discovery.
 - Auth middleware: Ensures all requests are authenticated and enforces ownership checks.
 - Database schema: Defines entities like User, Pet, Appointment, MedicalRecord, Vaccination, Medication, Allergy, HealthCondition, HealthMetric, AIConversation, AIMessage, Conversation, Message, Reminder.
 
 Key responsibilities:
-- Dashboard orchestrates data fetching, local state, and user interactions across multiple tabs.
-- API routes enforce authentication, authorization, validation, and business rules for all features.
+- Dashboard orchestrates data fetching, local state, and user interactions across multiple tabs including the new discover tab.
+- API routes enforce authentication, authorization, validation, and business rules for all features including AI health summaries and vet discovery.
 - Auth utilities provide session management and role-based guards.
 - Schema models ensure consistent data structure and relationships including new reminder entities.
 
 **Section sources**
-- [app/dashboard/page.tsx:1-1985](file://app/dashboard/page.tsx#L1-L1985)
+- [app/dashboard/page.tsx:1-2358](file://app/dashboard/page.tsx#L1-L2358)
 - [app/components/ChatWidget.tsx:1-149](file://app/components/ChatWidget.tsx#L1-L149)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
@@ -177,13 +189,15 @@ Key responsibilities:
 - [app/api/conversations/[conversationId]/read/route.ts:1-49](file://app/api/conversations/[conversationId]/read/route.ts#L1-L49)
 - [app/api/reminders/route.ts:1-30](file://app/api/reminders/route.ts#L1-L30)
 - [app/api/reminders/[reminderId]/route.ts:1-46](file://app/api/reminders/[reminderId]/route.ts#L1-L46)
+- [app/api/pets/[petId]/health-summary/route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [app/api/vet/discovery/route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [prisma/schema.prisma:1-312](file://prisma/schema.prisma#L1-L312)
 
 ## Architecture Overview
-The dashboard follows a client-server architecture with enhanced conversation management, slot-based appointment rescheduling, and comprehensive health reminders capabilities:
-- Client: React components manage UI state and call APIs for multiple tabs including the new chat functionality, slot-based rescheduling features, and health reminders management.
-- Server: Next.js API routes handle authentication, authorization, database queries, business logic, real-time conversation updates, and reminder management.
+The dashboard follows a client-server architecture with enhanced conversation management, slot-based appointment rescheduling, comprehensive health reminders, AI health summaries, and veterinarian discovery capabilities:
+- Client: React components manage UI state and call APIs for multiple tabs including the new discover tab, chat functionality, slot-based rescheduling features, health reminders management, and AI health summaries.
+- Server: Next.js API routes handle authentication, authorization, database queries, business logic, real-time conversation updates, reminder management, AI health summary generation, and veterinarian discovery with availability checking.
 - Data: Prisma ORM interacts with PostgreSQL based on the defined schema including new reminder tables for health tracking.
 - AI: Streaming NDJSON responses enable real-time status updates and results during AI processing.
 - Real-time Messaging: Polling-based messaging system with automatic read status updates.
@@ -194,26 +208,21 @@ participant U as "User"
 participant D as "Dashboard Page"
 participant VC as "VetChatInterface"
 participant AC as "AI Chat API"
+participant HS as "Health Summary API"
+participant VD as "Vet Discovery API"
 participant CC as "Conversation API"
 participant AR as "Appointment Reschedule API"
 participant AS as "Slots API"
 participant RM as "Reminders API"
 participant DB as "Database"
 U->>D : Navigate to Dashboard
-U->>D : View Health Reminders
-D->>RM : GET /api/reminders
-RM-->>D : Return pending reminders
-U->>D : Add Vaccination/Medication
-D->>RM : Refresh reminders after update
-RM-->>D : Return updated reminders
-U->>D : Click Reschedule Button
-D->>AS : GET /api/appointments/{id}/slots?date=YYYY-MM-DD
-AS->>DB : Check vet availability & working hours
-AS-->>D : Return available time slots
-U->>D : Select time slot from grid
-D->>AR : PUT /api/appointments/{id} with RESCHEDULE action
-AR->>DB : Validate appointment status & check conflicts
-AR-->>D : Return updated appointment
+U->>D : View AI Health Summary
+D->>HS : GET /api/pets/{id}/health-summary
+HS-->>D : Return stored facts + AI interpretation
+U->>D : Search Veterinarians
+D->>VD : GET /api/vet/discovery?filters
+VD->>DB : Check availability & filters
+VD-->>D : Return vets with availability
 U->>D : Open Chat for Appointment
 D->>AC : Load AI Chat History
 AC-->>D : Return AI Messages
@@ -231,9 +240,10 @@ VC-->>U : Display Real-time Messages
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:66-132](file://app/dashboard/page.tsx#L66-L132)
-- [app/dashboard/page.tsx:226-249](file://app/dashboard/page.tsx#L226-L249)
-- [app/dashboard/page.tsx:474-535](file://app/dashboard/page.tsx#L474-L535)
+- [app/dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+- [app/dashboard/page.tsx:285-311](file://app/dashboard/page.tsx#L285-L311)
+- [app/dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
+- [app/dashboard/page.tsx:1509-1650](file://app/dashboard/page.tsx#L1509-L1650)
 - [app/components/VetChatInterface.tsx:56-85](file://app/components/VetChatInterface.tsx#L56-L85)
 - [app/api/appointments/[appointmentId]/route.ts:17-125](file://app/api/appointments/[appointmentId]/route.ts#L17-L125)
 - [app/api/appointments/[appointmentId]/slots/route.ts:15-103](file://app/api/appointments/[appointmentId]/slots/route.ts#L15-L103)
@@ -241,23 +251,29 @@ VC-->>U : Display Real-time Messages
 - [app/api/conversations/[conversationId]/messages/route.ts:5-38](file://app/api/conversations/[conversationId]/messages/route.ts#L5-L38)
 - [app/api/conversations/[conversationId]/read/route.ts:5-41](file://app/api/conversations/[conversationId]/read/route.ts#L5-L41)
 - [app/api/reminders/route.ts:7-16](file://app/api/reminders/route.ts#L7-L16)
+- [app/api/pets/[petId]/health-summary/route.ts:32-192](file://app/api/pets/[petId]/health-summary/route.ts#L32-L192)
+- [app/api/vet/discovery/route.ts:24-192](file://app/api/vet/discovery/route.ts#L24-L192)
 
 ## Detailed Component Analysis
 
 ### Dashboard Interface
-- Navigation sidebar with tabs: Dashboard, My Pets, Appointments, AI Assistant, Profile.
+- Navigation sidebar with tabs: Dashboard, My Pets, Appointments, **Find a Vet**, AI Assistant, Profile.
 - Health overview panels: Counts for vaccinations, medications, allergies, last visit date derived from timeline.
 - Upcoming appointment card: Shows next future appointment details with both Reschedule and Cancel options.
 - Recent health activity timeline: Aggregated events from medical records, vaccinations, medications, allergies, conditions, metrics, and appointments.
 - **Enhanced**: Health reminders section displaying pending tasks with due date badges and clearance functionality.
+- **New**: AI Health Summary section with stored health facts and AI-generated interpretations.
+- **New**: Veterinarian Discovery tab with advanced search capabilities.
 - Quick actions: Add new pet and book appointment buttons.
 
 Data flow:
-- On mount, fetch profile, pets, appointments, discovery vets, initial timeline, and reminders for the first pet.
-- Selecting a pet updates selected pet, AI pet context, reloads timeline, vaccinations, and medications.
+- On mount, fetch profile, pets, appointments, discovery vets, initial timeline, reminders, and health summary for the first pet.
+- Selecting a pet updates selected pet, AI pet context, reloads timeline, vaccinations, medications, and clears health summary.
 - Booking an appointment posts to API and refreshes list.
 - **Updated**: Reschedule functionality uses slot-based selection with dynamic time slot grid instead of datetime picker.
 - **Updated**: Health reminders automatically refresh when vaccinations or medications are added.
+- **New**: AI Health Summary generates structured overviews combining stored facts with AI interpretations.
+- **New**: Veterinarian Discovery provides filtered searches with real-time availability checking.
 
 Error handling:
 - Displays error or success banners for user feedback.
@@ -267,9 +283,11 @@ Responsive behavior:
 - Uses Tailwind grid and flex layouts to adapt across screen sizes.
 
 **Section sources**
-- [app/dashboard/page.tsx:66-132](file://app/dashboard/page.tsx#L66-L132)
-- [app/dashboard/page.tsx:760-1067](file://app/dashboard/page.tsx#L760-L1067)
-- [app/dashboard/page.tsx:996-1026](file://app/dashboard/page.tsx#L996-L1026)
+- [app/dashboard/page.tsx:76-144](file://app/dashboard/page.tsx#L76-L144)
+- [app/dashboard/page.tsx:194-220](file://app/dashboard/page.tsx#L194-L220)
+- [app/dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
+- [app/dashboard/page.tsx:1509-1650](file://app/dashboard/page.tsx#L1509-L1650)
+- [app/dashboard/page.tsx:721-795](file://app/dashboard/page.tsx#L721-L795)
 
 ### Pet Portfolio Management
 - Lists all pets with selection highlighting and improved visual indicators.
@@ -285,8 +303,8 @@ Validation and errors:
 - Required fields enforced server-side; errors surfaced to UI.
 
 **Section sources**
-- [app/dashboard/page.tsx:800-831](file://app/dashboard/page.tsx#L800-L831)
-- [app/dashboard/page.tsx:1070-1130](file://app/dashboard/page.tsx#L1070-L1130)
+- [app/dashboard/page.tsx:421-487](file://app/dashboard/page.tsx#L421-L487)
+- [app/dashboard/page.tsx:1986-2047](file://app/dashboard/page.tsx#L1986-L2047)
 - [app/api/pets/route.ts:30-69](file://app/api/pets/route.ts#L30-L69)
 
 ### Health Tracking with Vaccinations and Medications
@@ -310,7 +328,7 @@ Display features:
 - [app/dashboard/page.tsx:43-52](file://app/dashboard/page.tsx#L43-L52)
 - [app/dashboard/page.tsx:209-225](file://app/dashboard/page.tsx#L209-L225)
 - [app/dashboard/page.tsx:251-309](file://app/dashboard/page.tsx#L251-L309)
-- [app/dashboard/page.tsx:1131-1208](file://app/dashboard/page.tsx#L1131-L1208)
+- [app/dashboard/page.tsx:2217-2353](file://app/dashboard/page.tsx#L2217-L2353)
 
 ### Health Reminders System
 - **New Feature**: Centralized health reminders display showing all pending tasks with due dates.
@@ -337,6 +355,71 @@ Integration points:
 - [app/api/reminders/route.ts:7-16](file://app/api/reminders/route.ts#L7-L16)
 - [app/api/reminders/[reminderId]/route.ts:8-32](file://app/api/reminders/[reminderId]/route.ts#L8-L32)
 
+### AI Health Summary Section
+- **New Feature**: Comprehensive AI-powered health summary generation that combines stored health facts with AI-generated interpretations.
+- **New Feature**: Distinct separation between stored facts (from database) and AI-generated insights (for discussion with veterinarians).
+- **New Feature**: Structured presentation of conditions, allergies, consultations, medications, vaccinations, and metrics.
+- **New Feature**: AI-generated overview, recurring concerns, observations, and suggested topics for veterinary discussions.
+
+Features:
+- Generate/Regenerate button for creating health summaries.
+- Loading states with appropriate feedback messages.
+- Two-section layout: Stored Health Facts (blue-themed) and AI-Generated Interpretation (purple-themed).
+- Error handling for AI provider failures with graceful fallback to stored facts only.
+- Metadata display showing AI provider and generation timestamp.
+
+Data flow:
+- Calls `/api/pets/{petId}/health-summary` endpoint with proper authentication.
+- Receives structured response with `facts` (stored data) and `summary` (AI interpretation).
+- Handles both successful AI responses and error cases gracefully.
+
+Display features:
+- Color-coded sections with clear visual distinction between factual data and AI insights.
+- Responsive grid layout for optimal viewing across devices.
+- Proper empty states and loading indicators.
+
+**Section sources**
+- [app/dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
+- [app/dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
+- [app/api/pets/[petId]/health-summary/route.ts:32-192](file://app/api/pets/[petId]/health-summary/route.ts#L32-L192)
+
+### Veterinarian Discovery Tab
+- **New Feature**: Advanced veterinarian search and discovery system with multiple filtering capabilities.
+- **New Feature**: Real-time availability checking based on working hours (9 AM - 5 PM Karachi time).
+- **New Feature**: Server-side filtering by name, specialization, clinic, location, and availability date.
+- **New Feature**: Direct booking integration from discovery results.
+
+Features:
+- Multi-criteria search form with name, specialization, clinic, location, and availability date filters.
+- Dynamic filter dropdowns populated from available data.
+- Real-time availability display showing free time slots for each veterinarian.
+- Verification status indicators for veterinarians.
+- Direct "Book Appointment" button for seamless transition to booking flow.
+
+Search capabilities:
+- Name search: Case-insensitive matching against first and last names.
+- Specialization filter: Matches against veterinarian specializations.
+- Clinic filter: Searches by clinic affiliation.
+- Location filter: Searches by clinic address.
+- Availability filter: Filters veterinarians with available slots on specific dates.
+
+Data flow:
+- Calls `/api/vet/discovery` endpoint with query parameters.
+- Receives formatted veterinarian data with clinic information and availability.
+- Updates filter dropdowns with available options from meta data.
+- Handles loading states and error conditions appropriately.
+
+Display features:
+- Card-based layout showing veterinarian details, clinics, and availability.
+- Color-coded verification status and specialization badges.
+- Responsive grid layout adapting to different screen sizes.
+- Clear empty states and loading indicators.
+
+**Section sources**
+- [app/dashboard/page.tsx:285-311](file://app/dashboard/page.tsx#L285-L311)
+- [app/dashboard/page.tsx:1509-1650](file://app/dashboard/page.tsx#L1509-L1650)
+- [app/api/vet/discovery/route.ts:24-192](file://app/api/vet/discovery/route.ts#L24-L192)
+
 ### Pet Timeline and Health Records
 - Aggregates multiple data sources into a unified chronological timeline:
   - Medical records (current version), vaccinations, medications, allergies, health conditions, health metrics, and appointments.
@@ -357,8 +440,9 @@ Cancellation:
 - Updates appointment status to CANCELLED and refreshes list.
 
 **Section sources**
-- [app/dashboard/page.tsx:415-465](file://app/dashboard/page.tsx#L415-L465)
-- [app/dashboard/page.tsx:474-535](file://app/dashboard/page.tsx#L474-L535)
+- [app/dashboard/page.tsx:490-515](file://app/dashboard/page.tsx#L490-L515)
+- [app/dashboard/page.tsx:541-609](file://app/dashboard/page.tsx#L541-L609)
+- [app/dashboard/page.tsx:2049-2215](file://app/dashboard/page.tsx#L2049-L2215)
 - [app/api/appointments/route.ts:69-143](file://app/api/appointments/route.ts#L69-L143)
 - [app/api/appointments/[appointmentId]/route.ts:17-125](file://app/api/appointments/[appointmentId]/route.ts#L17-L125)
 
@@ -378,7 +462,8 @@ Error handling:
 
 **Section sources**
 - [app/dashboard/page.tsx:160-179](file://app/dashboard/page.tsx#L160-L179)
-- [app/dashboard/page.tsx:537-613](file://app/dashboard/page.tsx#L537-L613)
+- [app/dashboard/page.tsx:611-681](file://app/dashboard/page.tsx#L611-L681)
+- [app/dashboard/page.tsx:1657-1733](file://app/dashboard/page.tsx#L1657-L1733)
 - [app/api/ai/chat/route.ts:7-66](file://app/api/ai/chat/route.ts#L7-L66)
 - [app/api/ai/chat/route.ts:68-349](file://app/api/ai/chat/route.ts#L68-L349)
 
@@ -389,7 +474,8 @@ Error handling:
 
 **Section sources**
 - [app/dashboard/page.tsx:134-153](file://app/dashboard/page.tsx#L134-L153)
-- [app/dashboard/page.tsx:323-345](file://app/dashboard/page.tsx#L323-L345)
+- [app/dashboard/page.tsx:397-419](file://app/dashboard/page.tsx#L397-L419)
+- [app/dashboard/page.tsx:1735-1808](file://app/dashboard/page.tsx#L1735-L1808)
 - [app/api/profile/route.ts:5-82](file://app/api/profile/route.ts#L5-L82)
 
 ### Floating Chat Widget (Platform Help)
@@ -406,6 +492,8 @@ Error handling:
 - **Updated**: Rescheduling dependencies include new slots API for availability calculation, appointment validation, conflict detection, and status management.
 - **Updated**: Conversation management dependencies include message polling, read status tracking, and real-time updates.
 - **Updated**: Health reminders dependencies include reminder CRUD operations with proper ownership validation.
+- **New**: AI Health Summary dependencies include AI provider integration, structured data extraction, and error handling for AI failures.
+- **New**: Veterinarian Discovery dependencies include complex filtering logic, availability calculations, and timezone-aware date handling.
 
 ```mermaid
 graph LR
@@ -418,6 +506,8 @@ D --> T["Timeline API"]
 D --> C["AI Chat API"]
 D --> CH["Chat Tab"]
 D --> RM["Reminders API"]
+D --> HS["Health Summary API"]
+D --> VD["Vet Discovery API"]
 CH --> VCI["VetChatInterface"]
 VCI --> CA["Conversation API"]
 CA --> M["Messages API"]
@@ -436,6 +526,8 @@ M --> AUTH
 RD --> AUTH
 RM --> AUTH
 RMD --> AUTH
+HS --> AUTH
+VD --> AUTH
 P --> DB["Prisma + Schema"]
 A --> DB
 AR --> DB
@@ -448,10 +540,12 @@ M --> DB
 RD --> DB
 RM --> DB
 RMD --> DB
+HS --> DB
+VD --> DB
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:1-1985](file://app/dashboard/page.tsx#L1-L1985)
+- [app/dashboard/page.tsx:1-2358](file://app/dashboard/page.tsx#L1-L2358)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
 - [app/api/appointments/route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
@@ -466,6 +560,8 @@ RMD --> DB
 - [app/api/conversations/[conversationId]/read/route.ts:1-49](file://app/api/conversations/[conversationId]/read/route.ts#L1-L49)
 - [app/api/reminders/route.ts:1-30](file://app/api/reminders/route.ts#L1-L30)
 - [app/api/reminders/[reminderId]/route.ts:1-46](file://app/api/reminders/[reminderId]/route.ts#L1-L46)
+- [app/api/pets/[petId]/health-summary/route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
+- [app/api/vet/discovery/route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [prisma/schema.prisma:1-312](file://prisma/schema.prisma#L1-L312)
 
@@ -487,6 +583,9 @@ RMD --> DB
 - **Updated**: Conversation listing with unread count optimization using database-level counting.
 - **Updated**: Health reminders refresh only when necessary (after vaccination/medication additions) to minimize API calls.
 - **Updated**: Due date calculations performed client-side using efficient mathematical operations.
+- **New**: AI Health Summary uses parallel queries to fetch multiple health data types simultaneously.
+- **New**: Veterinarian Discovery implements server-side filtering to reduce client-side processing overhead.
+- **New**: Availability calculations optimized with efficient date range queries and busy slot caching.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -502,6 +601,9 @@ Common issues and resolutions:
 - **Updated**: Message delivery problems: Check network connectivity and server response times; implement retry logic for failed message sends.
 - **Updated**: Reminder clearance issues: Verify reminder ownership and proper authentication before deletion attempts.
 - **Updated**: Vaccination/medication form validation: Ensure all required fields are properly filled and formatted before submission.
+- **New**: AI Health Summary errors: Check AI provider availability and handle graceful fallback to stored facts only.
+- **New**: Veterinarian Discovery issues: Verify date format (YYYY-MM-DD), check timezone handling, and ensure proper authentication.
+- **New**: Availability calculation problems: Confirm working hours configuration and timezone settings for accurate slot calculations.
 
 Error handling patterns:
 - Consistent error objects returned by APIs with code and message.
@@ -510,10 +612,12 @@ Error handling patterns:
 - **Updated**: Comprehensive error handling for modal dialogs with user-friendly error messages.
 - **Updated**: Fallback UI states for slot loading failures and network interruptions.
 - **Updated**: Proper error handling for reminder operations with clear user feedback.
+- **New**: AI provider failure handling with informative error messages and fallback to stored facts.
+- **New**: Filter validation for veterinarian discovery with clear error messages for invalid inputs.
 
 **Section sources**
-- [app/dashboard/page.tsx:66-132](file://app/dashboard/page.tsx#L66-L132)
-- [app/dashboard/page.tsx:474-535](file://app/dashboard/page.tsx#L474-L535)
+- [app/dashboard/page.tsx:76-144](file://app/dashboard/page.tsx#L76-L144)
+- [app/dashboard/page.tsx:541-609](file://app/dashboard/page.tsx#L541-L609)
 - [app/api/pets/[petId]/timeline/route.ts:14-31](file://app/api/pets/[petId]/timeline/route.ts#L14-L31)
 - [app/api/ai/chat/route.ts:20-27](file://app/api/ai/chat/route.ts#L20-L27)
 - [app/api/appointments/route.ts:84-110](file://app/api/appointments/route.ts#L84-L110)
@@ -523,10 +627,12 @@ Error handling patterns:
 - [app/components/VetChatInterface.tsx:69-75](file://app/components/VetChatInterface.tsx#L69-L75)
 - [app/api/reminders/route.ts:17-27](file://app/api/reminders/route.ts#L17-L27)
 - [app/api/reminders/[reminderId]/route.ts:33-43](file://app/api/reminders/[reminderId]/route.ts#L33-L43)
+- [app/api/pets/[petId]/health-summary/route.ts:193-204](file://app/api/pets/[petId]/health-summary/route.ts#L193-L204)
+- [app/api/vet/discovery/route.ts:193-204](file://app/api/vet/discovery/route.ts#L193-L204)
 
 ## Conclusion
-The Pet Owner Dashboard integrates comprehensive health overview, pet portfolio management, appointment scheduling and slot-based rescheduling, health reminders and tracking, and an AI-powered assistant with robust authentication, authorization, and error handling. Its responsive design ensures usability across devices, while efficient data fetching and streaming AI responses deliver a smooth user experience. The modular architecture separates concerns between client UI, API routes, and data layer, enabling maintainability and scalability.
+The Pet Owner Dashboard integrates comprehensive health overview, pet portfolio management, appointment scheduling and slot-based rescheduling, health reminders and tracking, AI health summaries, veterinarian discovery, and an AI-powered assistant with robust authentication, authorization, and error handling. Its responsive design ensures usability across devices, while efficient data fetching and streaming AI responses deliver a smooth user experience. The modular architecture separates concerns between client UI, API routes, and data layer, enabling maintainability and scalability.
 
-**Updated** The addition of comprehensive health reminders, vaccination and medication tracking systems significantly enhances the platform's proactive health management capabilities. The new health reminders section provides users with automated task management based on vaccination due dates and medication schedules, while the enhanced pet selection improvements offer better visual feedback and status indicators. Combined with the dedicated chat tab with complete conversation management and the enhanced slot-based rescheduling workflow, the dashboard now provides a complete health management solution that seamlessly integrates preventive care tracking with appointment scheduling and veterinary communication capabilities. The real-time messaging system, automatic reminder generation, and enhanced health tracking features work together to create a comprehensive pet healthcare management platform that helps pet owners stay organized and proactive about their pets' health needs.
+**Updated** The addition of comprehensive health reminders, vaccination and medication tracking systems, AI Health Summary section, and Veterinarian Discovery tab significantly enhances the platform's proactive health management capabilities. The new AI Health Summary provides users with structured health overviews combining stored facts with AI-generated interpretations, while the Veterinarian Discovery tab offers advanced search capabilities with real-time availability checking. Combined with the enhanced pet selection improvements, dedicated chat tab with complete conversation management, and the enhanced slot-based rescheduling workflow, the dashboard now provides a comprehensive health management solution that seamlessly integrates preventive care tracking, AI-powered insights, veterinarian discovery, appointment scheduling, and veterinary communication capabilities. The real-time messaging system, automatic reminder generation, enhanced health tracking features, and AI-powered health summaries work together to create a complete pet healthcare management platform that helps pet owners stay organized, informed, and proactive about their pets' health needs.
 
 [No sources needed since this section summarizes without analyzing specific files]

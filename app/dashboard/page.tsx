@@ -1,5 +1,5 @@
 'use client';
-import { PawPrint, Home, Users, Calendar, User, Settings, LogOut, Hand, Clock, Building2, Clipboard, RefreshCw, Bot, Shield, Pill, MessageCircle, X, Stethoscope, Bell } from 'lucide-react';
+import { PawPrint, Home, Users, Calendar, User, Settings, LogOut, Hand, Clock, Building2, Clipboard, RefreshCw, Bot, Shield, Pill, MessageCircle, X, Stethoscope, Bell, Search, MapPin, BadgeCheck } from 'lucide-react';
 
 
 import { useState, useEffect, useRef } from 'react';
@@ -18,7 +18,7 @@ export default function Dashboard() {
   const [discoveryVets, setDiscoveryVets] = useState<any[]>([]);
   
   // Navigation & Modals states
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'pets' | 'appointments' | 'ai' | 'profile' | 'chat'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pets' | 'appointments' | 'discover' | 'ai' | 'profile' | 'chat'>('dashboard');
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -49,6 +49,17 @@ export default function Dashboard() {
   const [vaccinationForm, setVaccinationForm] = useState({ vaccineName: '', administeredDate: '', dueDate: '', vetName: '' });
   const [isAddingMedication, setIsAddingMedication] = useState(false);
   const [medicationForm, setMedicationForm] = useState({ medicationName: '', dosage: '', frequency: '', startDate: '', endDate: '' });
+
+  // AI Health Summary states (blueprint Section 19)
+  const [healthSummary, setHealthSummary] = useState<any>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  // Veterinarian Discovery states (blueprint Section 14)
+  const [discoverFilters, setDiscoverFilters] = useState({ name: '', specialization: '', clinic: '', location: '', date: '' });
+  const [discoverResults, setDiscoverResults] = useState<any[]>([]);
+  const [discoverMeta, setDiscoverMeta] = useState<any>(null);
+  const [discoverLoading, setDiscoverLoading] = useState(false);
+  const [discoverSearched, setDiscoverSearched] = useState(false);
 
   // AI Health Assistant States
   const [aiPetId, setAiPetId] = useState('');
@@ -121,6 +132,7 @@ export default function Dashboard() {
         if (discoveryRes.ok) {
           const discoveryData = await discoveryRes.json();
           setDiscoveryVets(discoveryData.veterinarians);
+          setDiscoverMeta(discoveryData.meta);
         }
       } catch (err) {
         setError('Failed to load dashboard data.');
@@ -185,6 +197,7 @@ export default function Dashboard() {
     setTimeline([]);
     setVaccinations([]);
     setMedications([]);
+    setHealthSummary(null);
     try {
       const res = await fetch(`/api/pets/${pet.id}/timeline`);
       if (res.ok) {
@@ -246,6 +259,67 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Failed to refresh timeline:', err);
     }
+  }
+
+  // AI Health Summary (blueprint Section 19): pulls the pet's structured history from the
+  // server and renders stored facts and the AI interpretation as separate, clearly labeled sections.
+  async function handleGenerateSummary() {
+    if (!selectedPet) return;
+    setSummaryLoading(true);
+    setHealthSummary(null);
+    try {
+      const res = await fetch(`/api/pets/${selectedPet.id}/health-summary`);
+      const data = await res.json();
+      if (data.success) {
+        setHealthSummary(data);
+      } else {
+        setError(data.error?.message || 'Could not generate the health summary.');
+      }
+    } catch (err) {
+      setError('Connection error generating the health summary.');
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
+
+  // Veterinarian Discovery (blueprint Section 14): server-side filtered search by
+  // name, specialization, clinic, location and availability.
+  async function handleDiscoverSearch(e?: React.FormEvent) {
+    e?.preventDefault();
+    setDiscoverLoading(true);
+    setDiscoverSearched(true);
+    try {
+      const params = new URLSearchParams();
+      if (discoverFilters.name) params.set('name', discoverFilters.name);
+      if (discoverFilters.specialization) params.set('specialization', discoverFilters.specialization);
+      if (discoverFilters.clinic) params.set('clinic', discoverFilters.clinic);
+      if (discoverFilters.location) params.set('location', discoverFilters.location);
+      if (discoverFilters.date) params.set('date', discoverFilters.date);
+      const res = await fetch(`/api/vet/discovery${params.toString() ? `?${params.toString()}` : ''}`);
+      const data = await res.json();
+      if (data.success) {
+        setDiscoverResults(data.veterinarians);
+        setDiscoverMeta(data.meta);
+      } else {
+        setError(data.error?.message || 'Vet search failed.');
+      }
+    } catch (err) {
+      setError('Connection error searching veterinarians.');
+    } finally {
+      setDiscoverLoading(false);
+    }
+  }
+
+  // Open the booking modal prefilled from a discovery result card
+  function handleBookFromDiscovery(vet: any) {
+    setBookingForm({
+      petId: selectedPet?.id || pets[0]?.id || '',
+      vetId: vet.id,
+      clinicId: vet.clinics?.[0]?.id || '',
+      dateTime: '',
+      reason: '',
+    });
+    setIsBookingAppt(true);
   }
 
   // Vaccination & Medication tracking operations
@@ -687,6 +761,16 @@ export default function Dashboard() {
               }`}
             >
               <span><Calendar className="inline w-4 h-4" /></span> Appointments
+            </button>
+            <button
+              onClick={() => { setActiveTab('discover'); if (!discoverSearched && !discoverLoading) handleDiscoverSearch(); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                activeTab === 'discover'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
+              }`}
+            >
+              <span><Search className="inline w-4 h-4" /></span> Find a Vet
             </button>
             <button
               onClick={() => { setActiveTab('ai'); }}
@@ -1204,6 +1288,147 @@ export default function Dashboard() {
                     )}
                   </div>
                 </div>
+
+                {/* AI Health Summary (blueprint Section 19) — stored facts and AI interpretation are labeled distinctly */}
+                <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                  <div className="flex justify-between items-center mb-4">
+                    <h5 className="text-sm font-bold text-zinc-900 flex items-center gap-2"><Bot className="w-4 h-4 text-blue-600" /> AI Health Summary</h5>
+                    <button
+                      onClick={handleGenerateSummary}
+                      disabled={summaryLoading}
+                      className="rounded-full border border-blue-600 px-4 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 transition disabled:opacity-50"
+                    >
+                      {summaryLoading ? 'Generating...' : healthSummary ? 'Regenerate Summary' : 'Generate Summary'}
+                    </button>
+                  </div>
+
+                  {!healthSummary && !summaryLoading && (
+                    <p className="text-xs text-zinc-400 italic py-4">
+                      Generate a structured summary of {selectedPet.name}'s health history — conditions, recent consultations,
+                      treatments, vaccination status and suggested topics to discuss with the vet.
+                    </p>
+                  )}
+                  {summaryLoading && (
+                    <p className="text-xs text-zinc-400 italic py-4">Analyzing {selectedPet.name}'s health records...</p>
+                  )}
+
+                  {healthSummary && (
+                    <div className="flex flex-col gap-5">
+                      {/* Section A — stored facts from the database */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">Stored Health Facts</span>
+                          <span className="text-[10px] text-zinc-400">Pulled directly from {selectedPet.name}'s records — not AI-generated</span>
+                        </div>
+                        <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <p className="font-bold text-zinc-700 mb-1">Conditions ({healthSummary.facts.conditions.length})</p>
+                            {healthSummary.facts.conditions.length === 0 ? (
+                              <p className="text-zinc-400 italic">None recorded</p>
+                            ) : (
+                              <ul className="list-disc list-inside text-zinc-600 space-y-0.5">
+                                {healthSummary.facts.conditions.map((c: any, i: number) => (
+                                  <li key={i}>{c.name} — {c.status}{c.onsetDate ? ` (onset ${new Date(c.onsetDate).toLocaleDateString()})` : ''}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-bold text-zinc-700 mb-1">Allergies ({healthSummary.facts.allergies.length})</p>
+                            {healthSummary.facts.allergies.length === 0 ? (
+                              <p className="text-zinc-400 italic">None recorded</p>
+                            ) : (
+                              <ul className="list-disc list-inside text-zinc-600 space-y-0.5">
+                                {healthSummary.facts.allergies.map((a: any, i: number) => (
+                                  <li key={i}>{a.allergen} — {a.severity || 'Normal'} severity</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-bold text-zinc-700 mb-1">Recent Consultations ({healthSummary.facts.consultations.length})</p>
+                            {healthSummary.facts.consultations.length === 0 ? (
+                              <p className="text-zinc-400 italic">None recorded</p>
+                            ) : (
+                              <ul className="list-disc list-inside text-zinc-600 space-y-0.5">
+                                {healthSummary.facts.consultations.slice(0, 3).map((c: any, i: number) => (
+                                  <li key={i}>{c.date ? new Date(c.date).toLocaleDateString() : 'Date N/A'} — {c.diagnosis || 'Consultation'}{c.symptoms ? ` (symptoms: ${c.symptoms})` : ''}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-bold text-zinc-700 mb-1">Medications ({healthSummary.facts.medications.length})</p>
+                            {healthSummary.facts.medications.length === 0 ? (
+                              <p className="text-zinc-400 italic">None recorded</p>
+                            ) : (
+                              <ul className="list-disc list-inside text-zinc-600 space-y-0.5">
+                                {healthSummary.facts.medications.map((m: any, i: number) => (
+                                  <li key={i}>{m.name} — {m.dosage}, {m.frequency} ({m.status})</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                          <div className="md:col-span-2">
+                            <p className="font-bold text-zinc-700 mb-1">Vaccinations ({healthSummary.facts.vaccinations.length})</p>
+                            {healthSummary.facts.vaccinations.length === 0 ? (
+                              <p className="text-zinc-400 italic">None recorded</p>
+                            ) : (
+                              <ul className="list-disc list-inside text-zinc-600 space-y-0.5">
+                                {healthSummary.facts.vaccinations.map((v: any, i: number) => (
+                                  <li key={i}>{v.vaccineName} — given {v.administeredDate ? new Date(v.administeredDate).toLocaleDateString() : 'date N/A'}{v.dueDate ? `, next due ${new Date(v.dueDate).toLocaleDateString()}` : ', no due date set'}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section B — AI-generated interpretation, distinctly labeled */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100">AI-Generated Interpretation</span>
+                          <span className="text-[10px] text-zinc-400">For discussion with your veterinarian — not a diagnosis</span>
+                        </div>
+                        {healthSummary.aiError ? (
+                          <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-xs text-orange-700">{healthSummary.aiError}</div>
+                        ) : (
+                          <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-4 flex flex-col gap-3 text-xs text-zinc-700">
+                            <div>
+                              <p className="font-bold text-zinc-800 mb-1">Overview</p>
+                              <p className="leading-relaxed">{healthSummary.summary.overview}</p>
+                            </div>
+                            {healthSummary.summary.recurringConcerns.length > 0 && (
+                              <div>
+                                <p className="font-bold text-zinc-800 mb-1">Recurring Concerns</p>
+                                <ul className="list-disc list-inside space-y-0.5">
+                                  {healthSummary.summary.recurringConcerns.map((c: string, i: number) => <li key={i}>{c}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                            {healthSummary.summary.observations.length > 0 && (
+                              <div>
+                                <p className="font-bold text-zinc-800 mb-1">Relevant Observations</p>
+                                <ul className="list-disc list-inside space-y-0.5">
+                                  {healthSummary.summary.observations.map((o: string, i: number) => <li key={i}>{o}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                            <div>
+                              <p className="font-bold text-zinc-800 mb-1">Suggested Topics to Discuss with the Vet</p>
+                              <ol className="list-decimal list-inside space-y-0.5">
+                                {healthSummary.summary.topicsForVet.map((t: string, i: number) => <li key={i}>{t}</li>)}
+                              </ol>
+                            </div>
+                            <p className="text-[10px] text-zinc-400 border-t border-purple-100 pt-2">
+                              Generated by {String(healthSummary.meta.provider).toUpperCase()} on {new Date(healthSummary.meta.generatedAt).toLocaleString()}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1275,6 +1500,154 @@ export default function Dashboard() {
                       </button>
                     </div>
                   )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 2.3b VETERINARIAN DISCOVERY (blueprint Section 14) */}
+        {activeTab === 'discover' && (
+          <div className="flex flex-col gap-6">
+            <div>
+              <h3 className="font-bold text-lg text-zinc-900">Find a Veterinarian</h3>
+              <p className="text-xs text-zinc-400 mt-0.5">Search by name, specialization, clinic, location or availability on a specific date.</p>
+            </div>
+
+            {/* Search filters card — filters are applied server-side */}
+            <form onSubmit={handleDiscoverSearch} className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Vet Name</label>
+                  <input
+                    type="text" value={discoverFilters.name}
+                    onChange={e => setDiscoverFilters({ ...discoverFilters, name: e.target.value })}
+                    placeholder="e.g. Alice"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Specialization</label>
+                  <select
+                    value={discoverFilters.specialization}
+                    onChange={e => setDiscoverFilters({ ...discoverFilters, specialization: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  >
+                    <option value="">Any specialization</option>
+                    {(discoverMeta?.specializations || []).map((s: string) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Clinic</label>
+                  <select
+                    value={discoverFilters.clinic}
+                    onChange={e => setDiscoverFilters({ ...discoverFilters, clinic: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  >
+                    <option value="">Any clinic</option>
+                    {(discoverMeta?.clinics || []).map((c: any) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Location</label>
+                  <input
+                    type="text" value={discoverFilters.location}
+                    onChange={e => setDiscoverFilters({ ...discoverFilters, location: e.target.value })}
+                    placeholder="e.g. Green Valley"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 block mb-1">Available on (optional)</label>
+                  <input
+                    type="date" value={discoverFilters.date} min={new Date().toLocaleDateString('en-CA')}
+                    onChange={e => setDiscoverFilters({ ...discoverFilters, date: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="submit" disabled={discoverLoading}
+                    className="rounded-full bg-blue-600 px-5 py-1.5 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50"
+                  >
+                    {discoverLoading ? 'Searching...' : 'Search'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiscoverFilters({ name: '', specialization: '', clinic: '', location: '', date: '' });
+                      setDiscoverResults([]);
+                      setDiscoverSearched(false);
+                    }}
+                    className="rounded-full border border-zinc-300 px-5 py-1.5 text-xs font-bold text-zinc-600 hover:bg-zinc-50 transition"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            {/* Results */}
+            {discoverLoading && (
+              <p className="text-xs text-zinc-400 italic">Searching veterinarians...</p>
+            )}
+            {!discoverLoading && discoverSearched && discoverResults.length === 0 && (
+              <p className="text-xs text-zinc-400 italic">No veterinarians match the current filters.</p>
+            )}
+            {!discoverLoading && !discoverSearched && (
+              <p className="text-xs text-zinc-400 italic">Enter filters and hit Search to browse available veterinarians.</p>
+            )}
+            <div className="flex flex-col gap-4">
+              {discoverResults.map((v: any) => (
+                <div key={v.id} className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-bold text-zinc-900">Dr. {v.firstName} {v.lastName}</h4>
+                        {v.isVerified ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-100 text-green-700 flex items-center gap-1"><BadgeCheck className="w-3 h-3" /> Verified</span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-100 text-zinc-500">Pending verification</span>
+                        )}
+                        {v.specialization && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">{v.specialization}</span>
+                        )}
+                      </div>
+                      <div className="mt-2 flex flex-col gap-1">
+                        {v.clinics.length === 0 ? (
+                          <p className="text-[10px] text-zinc-400 italic flex items-center gap-1"><Building2 className="w-3 h-3" /> No clinic affiliation listed</p>
+                        ) : (
+                          v.clinics.map((c: any) => (
+                            <p key={c.id} className="text-[10px] text-zinc-500 flex items-center gap-1">
+                              <MapPin className="w-3 h-3 shrink-0" /> {c.name} — {c.address}
+                            </p>
+                          ))
+                        )}
+                      </div>
+                      {v.availability && (
+                        <div className="mt-3">
+                          <p className="text-[10px] font-bold text-zinc-600 mb-1 flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Free times on {v.availability.date} (Karachi):
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {v.availability.freeSlots.map((s: any) => (
+                              <span key={s.iso} className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-100">{s.label}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleBookFromDiscovery(v)}
+                      className="shrink-0 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-blue-700 transition shadow-sm shadow-blue-500/20"
+                    >
+                      Book Appointment
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1718,7 +2091,7 @@ export default function Dashboard() {
                 >
                   <option value="">Choose Doctor...</option>
                   {discoveryVets.map(v => (
-                    <option key={v.id} value={v.id}>Dr. {v.user?.firstName} {v.user?.lastName} ({v.specialization || 'General Vet'})</option>
+                    <option key={v.id} value={v.id}>Dr. {v.firstName} {v.lastName} ({v.specialization || 'General Vet'})</option>
                   ))}
                 </select>
               </div>

@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: app_frontend
-title: Next.js App Frontend (Landing, Dashboards & API Routes)
+title: PETIVA Next.js App Frontend
 scope:
     - app/
 source_files: []

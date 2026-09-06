@@ -1,0 +1,1 @@
+Root of the Pet Healthcare application that wires a Next.js frontend, shared server library, Prisma schema/seed, and design docs into a single deployable service with session-based auth and AI-assisted pet booking.

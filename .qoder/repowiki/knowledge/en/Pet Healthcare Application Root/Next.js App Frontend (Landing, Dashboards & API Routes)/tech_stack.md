@@ -1,1 +1,0 @@
-Next.js App Router with TypeScript Route Handlers (`route.ts`) for server APIs and React Server Components for pages, styled via Tailwind CSS defined in `globals.css`; Google Identity Services SDK loaded dynamically on the client for OAuth login.

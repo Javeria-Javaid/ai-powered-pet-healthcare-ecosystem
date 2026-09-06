@@ -1,1 +1,0 @@
-Next.js App Router frontend that exposes a public landing page, role-based dashboards, and REST API route handlers sharing a root layout and Tailwind theme.

@@ -313,6 +313,101 @@ async function main() {
     console.log('  SKIP: no pet available for tracking tests');
   }
 
+  console.log('=== TEST 7A: AI Health Summary (Section 19) ===');
+  if (petId) {
+    const hsUnauth = await fetch(`${BASE}/api/pets/${petId}/health-summary`);
+    check('Health summary unauthenticated is rejected (401)', hsUnauth.status === 401, `Got ${hsUnauth.status}`);
+
+    const hsNotFound = await fetch(`${BASE}/api/pets/nonexistent-pet-id/health-summary`, { headers: authed(owner.cookie) });
+    check('Health summary for unknown pet is NOT_FOUND (404)', hsNotFound.status === 404, `Got ${hsNotFound.status}`);
+
+    if (cookie2) {
+      const hsForbidden = await fetch(`${BASE}/api/pets/${petId}/health-summary`, { headers: authed(cookie2) });
+      check('Cross-owner health summary is FORBIDDEN (403)', hsForbidden.status === 403, `Got ${hsForbidden.status}`);
+    }
+
+    const hsRes = await fetch(`${BASE}/api/pets/${petId}/health-summary`, { headers: authed(owner.cookie) });
+    const hsData = await hsRes.json();
+    check('Health summary succeeds for owner (200)', hsRes.status === 200 && hsData.success === true, JSON.stringify(hsData).slice(0, 200));
+    check('Stored facts returned with the summary (facts.counts present)', !!hsData.facts?.counts && hsData.facts.counts.vaccinations >= 1 && hsData.facts.counts.medications >= 1, JSON.stringify(hsData.facts?.counts));
+    check('Provider and generation metadata attached', typeof hsData.meta?.provider === 'string' && !!hsData.meta?.generatedAt);
+
+    if (hsData.summary) {
+      check('AI overview is a substantive string', typeof hsData.summary.overview === 'string' && hsData.summary.overview.length >= 40, (hsData.summary.overview || '').slice(0, 100));
+      check('Suggested topics for the vet are present', Array.isArray(hsData.summary.topicsForVet) && hsData.summary.topicsForVet.length >= 1, JSON.stringify(hsData.summary.topicsForVet).slice(0, 200));
+      check('Recurring concerns and observations are arrays', Array.isArray(hsData.summary.recurringConcerns) && Array.isArray(hsData.summary.observations));
+      const hsText = JSON.stringify(hsData.summary).replace(/\uD83D\uDC15|\u{1F415}/gu, ''); // the test pet name intentionally contains a dog emoji
+      const emojiRe = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/u;
+      check('AI-generated summary text contains no emojis', !emojiRe.test(hsText));
+      console.log(`  AI provider: ${hsData.meta.provider} | topics: ${hsData.summary.topicsForVet.length} | overview: ${hsData.summary.overview.slice(0, 120)}...`);
+    } else {
+      check('AI summary either parses or reports a graceful aiError', typeof hsData.aiError === 'string' && hsData.aiError.length > 0, JSON.stringify(hsData.aiError));
+      console.log('  AI interpretation unavailable (aiError), stored facts still served.');
+    }
+  } else {
+    console.log('  SKIP: no pet available for health summary tests');
+  }
+
+  console.log('=== TEST 7B: Veterinarian Discovery (Section 14) ===');
+  const discUnauth = await fetch(`${BASE}/api/vet/discovery`);
+  check('Discovery unauthenticated is rejected (401)', discUnauth.status === 401, `Got ${discUnauth.status}`);
+
+  const discAll = await (await fetch(`${BASE}/api/vet/discovery`, { headers: authed(owner.cookie) })).json();
+  check('Discovery lists the seeded + demo vets', (discAll.veterinarians || []).length >= 6, `Got ${discAll.veterinarians?.length}`);
+  check('Discovery results carry flat names and clinics', (discAll.veterinarians || []).every(v => typeof v.firstName === 'string' && Array.isArray(v.clinics)));
+  check('Discovery meta lists distinct specializations', ['Cardiology', 'Dermatology', 'Dentistry'].every(s => (discAll.meta?.specializations || []).includes(s)), JSON.stringify(discAll.meta?.specializations));
+  check('Discovery meta lists both clinics', (discAll.meta?.clinics || []).length >= 2);
+
+  const discByName = await (await fetch(`${BASE}/api/vet/discovery?name=diana`, { headers: authed(owner.cookie) })).json();
+  check('Name filter matches vet by first name', discByName.veterinarians?.length === 1 && discByName.veterinarians[0]?.firstName === 'Diana', JSON.stringify(discByName.veterinarians?.map(v => v.firstName)));
+
+  const discBySpec = await (await fetch(`${BASE}/api/vet/discovery?specialization=cardio`, { headers: authed(owner.cookie) })).json();
+  check('Specialization filter matches Cardiology vet', discBySpec.veterinarians?.length === 1 && discBySpec.veterinarians[0]?.firstName === 'Fatima', JSON.stringify(discBySpec.veterinarians?.map(v => v.specialization)));
+
+  const discByLoc = await (await fetch(`${BASE}/api/vet/discovery?location=metropolis`, { headers: authed(owner.cookie) })).json();
+  check('Location filter only returns vets with a Metropolis clinic', (discByLoc.veterinarians || []).length > 0 && discByLoc.veterinarians.every(v => v.clinics.some(c => /metropolis/i.test(c.address))));
+
+  const discByClinic = await (await fetch(`${BASE}/api/vet/discovery?clinic=Downtown`, { headers: authed(owner.cookie) })).json();
+  check('Clinic filter only returns vets affiliated with that clinic', (discByClinic.veterinarians || []).length > 0 && discByClinic.veterinarians.every(v => v.clinics.some(c => /Downtown/.test(c.name))));
+
+  const discBadDate = await fetch(`${BASE}/api/vet/discovery?date=notadate`, { headers: authed(owner.cookie) });
+  check('Invalid availability date is rejected (400)', discBadDate.status === 400);
+  const discPastDate = await fetch(`${BASE}/api/vet/discovery?date=2020-01-01`, { headers: authed(owner.cookie) });
+  check('Past availability date is rejected (400)', discPastDate.status === 400);
+
+  // Availability: book vet's 10 AM slot on a fresh future date, then confirm discovery excludes it
+  const discAvailDate = new Date(Date.now() + 12 * 24 * 60 * 60 * 1000);
+  discAvailDate.setUTCHours(5, 0, 0, 0); // 10 AM Karachi, within working hours
+  const discDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(discAvailDate);
+  const discBookRes = await fetch(`${BASE}/api/appointments`, {
+    method: 'POST',
+    headers: authed(owner.cookie),
+    body: JSON.stringify({ petId, vetId: vet.id, clinicId, dateTime: discAvailDate.toISOString(), reason: 'Discovery availability test' }),
+  });
+  const discBookData = await discBookRes.json();
+  check('Discovery test booking created on vet 10 AM slot', discBookRes.status === 201 && discBookData.success === true, JSON.stringify(discBookData).slice(0, 200));
+
+  const discWithDate = await (await fetch(`${BASE}/api/vet/discovery?date=${discDateStr}`, { headers: authed(owner.cookie) })).json();
+  const discBookedVet = (discWithDate.veterinarians || []).find(v => v.id === vet.id);
+  check('Availability returned for every matched vet', (discWithDate.veterinarians || []).length > 0 && discWithDate.veterinarians.every(v => v.availability?.date === discDateStr));
+  if (discBookedVet) {
+    const labels = discBookedVet.availability.freeSlots.map(s => s.label);
+    check('Booked 10 AM slot is excluded from free slots', !labels.includes('10 AM'), JSON.stringify(labels));
+    check('Adjacent working hours still free (9 AM and 11 AM)', labels.includes('9 AM') && labels.includes('11 AM'), JSON.stringify(labels));
+  } else {
+    check('Booked vet appears in availability search', false, `vet ${vet.id} not in results`);
+  }
+
+  // Cleanup: cancel so the slot frees up again
+  if (discBookData.success) {
+    const discCancel = await fetch(`${BASE}/api/appointments/${discBookData.appointment.id}`, {
+      method: 'PUT',
+      headers: authed(owner.cookie),
+      body: JSON.stringify({ status: 'CANCELLED' }),
+    });
+    check('Discovery test booking cancelled (cleanup)', discCancel.status === 200);
+  }
+
   console.log('=== TEST 8: Reschedule (slot options, owner-only, resets to REQUESTED) ===');
   const karachiFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' });
   const reschedBase = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000);

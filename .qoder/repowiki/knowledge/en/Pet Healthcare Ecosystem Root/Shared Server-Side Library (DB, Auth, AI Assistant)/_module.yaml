@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: lib_shared
-title: Shared Server Library (Auth, DB & AI Assistant)
+title: Shared Server-Side Library (DB, Auth, AI Assistant)
 scope:
     - lib/
 source_files: []

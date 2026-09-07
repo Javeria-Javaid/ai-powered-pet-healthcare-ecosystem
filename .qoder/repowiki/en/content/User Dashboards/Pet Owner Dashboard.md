@@ -3,6 +3,9 @@
 <cite>
 **Referenced Files in This Document**
 - [app/dashboard/page.tsx](file://app/dashboard/page.tsx)
+- [app/api/pets/[petId]/documents/route.ts](file://app/api/pets/[petId]/documents/route.ts)
+- [app/api/pets/[petId]/documents/[documentId]/route.ts](file://app/api/pets/[petId]/documents/[documentId]/route.ts)
+- [lib/storage.ts](file://lib/storage.ts)
 - [app/api/pets/[petId]/health-summary/route.ts](file://app/api/pets/[petId]/health-summary/route.ts)
 - [app/api/vet/discovery/route.ts](file://app/api/vet/discovery/route.ts)
 - [app/api/appointments/[appointmentId]/slots/route.ts](file://app/api/appointments/[appointmentId]/slots/route.ts)
@@ -28,12 +31,12 @@
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive AI Health Summary section with stored health facts and AI-generated interpretations
-- Implemented Veterinarian Discovery tab with advanced search capabilities including name, specialization, clinic, location, and availability filtering
-- Enhanced navigation with discover tab integration alongside existing dashboard tabs
-- Improved appointment dropdown formatting for better user experience
-- Added responsive design considerations for new feature sections across desktop, tablet, and mobile devices
-- Integrated server-side veterinarian discovery API with real-time availability checking
+- Added comprehensive medical document management capabilities including upload interface, document listing, signed URL viewing, and delete functionality
+- Integrated Supabase Storage for secure file storage with signed URL generation for temporary access
+- Implemented owner-only document operations with proper authentication and authorization checks
+- Enhanced dashboard with new Medical Documents section featuring file type badges, uploader information, and action buttons
+- Added robust error handling for storage configuration issues and file validation
+- Updated data flow to include document loading on pet selection and initial dashboard load
 
 ## Table of Contents
 1. Introduction
@@ -49,7 +52,7 @@
 ## Introduction
 This document explains the Pet Owner Dashboard in PETIVA, focusing on the main dashboard interface, pet portfolio management, appointment booking and rescheduling workflow, integrated AI health assistant chat, profile management, responsive design patterns, data fetching strategies, state management, and error handling. It is designed for both technical and non-technical readers to understand how the dashboard works end-to-end.
 
-**Updated** The dashboard now features an enhanced health reminders system with comprehensive vaccination and medication tracking, plus a new AI Health Summary section that provides structured health overviews with both stored facts and AI-generated interpretations, and a Veterinarian Discovery tab with advanced search capabilities for finding available veterinarians based on multiple criteria.
+**Updated** The dashboard now features enhanced medical document management capabilities allowing pet owners to upload, view, and manage their pets' medical records including prescriptions, lab reports, vaccination certificates, and diagnostic images. The system provides secure cloud storage with time-limited signed URLs for document viewing, comprehensive file validation, and owner-only access controls. Combined with existing health reminders, vaccination and medication tracking systems, AI Health Summary section, and Veterinarian Discovery tab, the platform now offers a complete healthcare management solution.
 
 ## Project Structure
 The dashboard is implemented as a Next.js client component with server-side API routes for data operations. The root layout sets global styles and metadata. Tailwind CSS provides responsive utilities across devices.
@@ -77,8 +80,12 @@ REMINDERS["Reminders API<br/>app/api/reminders/route.ts"]
 REMINDER_DELETE["Reminder Delete API<br/>app/api/reminders/[reminderId]/route.ts"]
 HEALTH_SUMMARY["Health Summary API<br/>app/api/pets/[petId]/health-summary/route.ts"]
 VET_DISCOVERY["Vet Discovery API<br/>app/api/vet/discovery/route.ts"]
+DOCS_LIST["Documents List API<br/>app/api/pets/[petId]/documents/route.ts"]
+DOCS_UPLOAD["Documents Upload API<br/>app/api/pets/[petId]/documents/route.ts"]
+DOCS_DELETE["Document Delete API<br/>app/api/pets/[petId]/documents/[documentId]/route.ts"]
 end
-subgraph "Auth & Data"
+subgraph "Storage & Auth"
+STORAGE["Supabase Storage<br/>lib/storage.ts"]
 AUTH["Auth Utilities<br/>lib/auth.ts"]
 SCHEMA["Database Schema<br/>prisma/schema.prisma"]
 end
@@ -97,9 +104,15 @@ D --> REMINDERS
 D --> REMINDER_DELETE
 D --> HEALTH_SUMMARY
 D --> VET_DISCOVERY
+D --> DOCS_LIST
+D --> DOCS_UPLOAD
+D --> DOCS_DELETE
 W --> AICHAT
 VC --> MSG_API
 VC --> READ_API
+DOCS_LIST --> STORAGE
+DOCS_UPLOAD --> STORAGE
+DOCS_DELETE --> STORAGE
 PETS --> AUTH
 APPTS --> AUTH
 APPT_UPDATE --> AUTH
@@ -115,6 +128,9 @@ REMINDERS --> AUTH
 REMINDER_DELETE --> AUTH
 HEALTH_SUMMARY --> AUTH
 VET_DISCOVERY --> AUTH
+DOCS_LIST --> AUTH
+DOCS_UPLOAD --> AUTH
+DOCS_DELETE --> AUTH
 PETS --> SCHEMA
 APPTS --> SCHEMA
 APPT_UPDATE --> SCHEMA
@@ -130,10 +146,13 @@ REMINDERS --> SCHEMA
 REMINDER_DELETE --> SCHEMA
 HEALTH_SUMMARY --> SCHEMA
 VET_DISCOVERY --> SCHEMA
+DOCS_LIST --> SCHEMA
+DOCS_UPLOAD --> SCHEMA
+DOCS_DELETE --> SCHEMA
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:1-2358](file://app/dashboard/page.tsx#L1-L2358)
+- [app/dashboard/page.tsx:1-2487](file://app/dashboard/page.tsx#L1-L2487)
 - [app/components/ChatWidget.tsx:1-149](file://app/components/ChatWidget.tsx#L1-L149)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
@@ -151,6 +170,9 @@ VET_DISCOVERY --> SCHEMA
 - [app/api/reminders/[reminderId]/route.ts:1-46](file://app/api/reminders/[reminderId]/route.ts#L1-L46)
 - [app/api/pets/[petId]/health-summary/route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
 - [app/api/vet/discovery/route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
+- [app/api/pets/[petId]/documents/route.ts:1-223](file://app/api/pets/[petId]/documents/route.ts#L1-L223)
+- [app/api/pets/[petId]/documents/[documentId]/route.ts:1-67](file://app/api/pets/[petId]/documents/[documentId]/route.ts#L1-L67)
+- [lib/storage.ts:1-125](file://lib/storage.ts#L1-L125)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [prisma/schema.prisma:1-312](file://prisma/schema.prisma#L1-L312)
 
@@ -162,18 +184,20 @@ VET_DISCOVERY --> SCHEMA
 - Dashboard page: Central UI for health overview, upcoming appointments, pet profiles, quick actions, and navigation between tabs (dashboard, pets, appointments, discover, AI assistant, chat, profile).
 - Chat widget: Floating assistant for general platform help; separate from the pet-specific AI assistant in the dashboard.
 - VetChatInterface: Dedicated component for real-time conversation between pet owners and veterinarians with message polling and read status tracking.
-- API routes: Secure endpoints for pets, appointments, profile updates, pet timeline aggregation, AI chat with streaming responses, comprehensive conversation management, health reminders, AI health summaries, and veterinarian discovery.
+- API routes: Secure endpoints for pets, appointments, profile updates, pet timeline aggregation, AI chat with streaming responses, comprehensive conversation management, health reminders, AI health summaries, veterinarian discovery, and medical document management.
+- Storage layer: Supabase Storage integration for secure file storage with signed URL generation and bucket management.
 - Auth middleware: Ensures all requests are authenticated and enforces ownership checks.
-- Database schema: Defines entities like User, Pet, Appointment, MedicalRecord, Vaccination, Medication, Allergy, HealthCondition, HealthMetric, AIConversation, AIMessage, Conversation, Message, Reminder.
+- Database schema: Defines entities like User, Pet, Appointment, MedicalRecord, Vaccination, Medication, Allergy, HealthCondition, HealthMetric, AIConversation, AIMessage, Conversation, Message, Reminder, Document.
 
 Key responsibilities:
-- Dashboard orchestrates data fetching, local state, and user interactions across multiple tabs including the new discover tab.
-- API routes enforce authentication, authorization, validation, and business rules for all features including AI health summaries and vet discovery.
+- Dashboard orchestrates data fetching, local state, and user interactions across multiple tabs including the new medical documents section.
+- API routes enforce authentication, authorization, validation, and business rules for all features including document uploads, storage operations, and access controls.
+- Storage utilities provide secure file operations, signed URL generation, and bucket management.
 - Auth utilities provide session management and role-based guards.
-- Schema models ensure consistent data structure and relationships including new reminder entities.
+- Schema models ensure consistent data structure and relationships including new document entities.
 
 **Section sources**
-- [app/dashboard/page.tsx:1-2358](file://app/dashboard/page.tsx#L1-L2358)
+- [app/dashboard/page.tsx:1-2487](file://app/dashboard/page.tsx#L1-L2487)
 - [app/components/ChatWidget.tsx:1-149](file://app/components/ChatWidget.tsx#L1-L149)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
@@ -191,14 +215,18 @@ Key responsibilities:
 - [app/api/reminders/[reminderId]/route.ts:1-46](file://app/api/reminders/[reminderId]/route.ts#L1-L46)
 - [app/api/pets/[petId]/health-summary/route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
 - [app/api/vet/discovery/route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
+- [app/api/pets/[petId]/documents/route.ts:1-223](file://app/api/pets/[petId]/documents/route.ts#L1-L223)
+- [app/api/pets/[petId]/documents/[documentId]/route.ts:1-67](file://app/api/pets/[petId]/documents/[documentId]/route.ts#L1-L67)
+- [lib/storage.ts:1-125](file://lib/storage.ts#L1-L125)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [prisma/schema.prisma:1-312](file://prisma/schema.prisma#L1-L312)
 
 ## Architecture Overview
-The dashboard follows a client-server architecture with enhanced conversation management, slot-based appointment rescheduling, comprehensive health reminders, AI health summaries, and veterinarian discovery capabilities:
-- Client: React components manage UI state and call APIs for multiple tabs including the new discover tab, chat functionality, slot-based rescheduling features, health reminders management, and AI health summaries.
-- Server: Next.js API routes handle authentication, authorization, database queries, business logic, real-time conversation updates, reminder management, AI health summary generation, and veterinarian discovery with availability checking.
-- Data: Prisma ORM interacts with PostgreSQL based on the defined schema including new reminder tables for health tracking.
+The dashboard follows a client-server architecture with enhanced conversation management, slot-based appointment rescheduling, comprehensive health reminders, AI health summaries, veterinarian discovery, and medical document management capabilities:
+- Client: React components manage UI state and call APIs for multiple tabs including the new discover tab, chat functionality, slot-based rescheduling features, health reminders management, AI health summaries, and medical document operations.
+- Server: Next.js API routes handle authentication, authorization, database queries, business logic, real-time conversation updates, reminder management, AI health summary generation, veterinarian discovery with availability checking, and secure document storage operations.
+- Storage: Supabase Storage provides secure file storage with automatic bucket creation, file validation, signed URL generation, and object deletion capabilities.
+- Data: Prisma ORM interacts with PostgreSQL based on the defined schema including new document tables for metadata storage.
 - AI: Streaming NDJSON responses enable real-time status updates and results during AI processing.
 - Real-time Messaging: Polling-based messaging system with automatic read status updates.
 
@@ -214,45 +242,39 @@ participant CC as "Conversation API"
 participant AR as "Appointment Reschedule API"
 participant AS as "Slots API"
 participant RM as "Reminders API"
+participant DS as "Documents API"
+participant ST as "Supabase Storage"
 participant DB as "Database"
 U->>D : Navigate to Dashboard
-U->>D : View AI Health Summary
-D->>HS : GET /api/pets/{id}/health-summary
-HS-->>D : Return stored facts + AI interpretation
-U->>D : Search Veterinarians
-D->>VD : GET /api/vet/discovery?filters
-VD->>DB : Check availability & filters
-VD-->>D : Return vets with availability
-U->>D : Open Chat for Appointment
-D->>AC : Load AI Chat History
-AC-->>D : Return AI Messages
-U->>VC : Open Appointment Chat
-VC->>CC : GET /api/appointments/{id}/conversation
-CC->>DB : Check Authorization & Create Conversation
-CC-->>VC : Return Conversation Context
-VC->>CC : GET /api/conversations/{id}/messages
-CC-->>VC : Return Messages
-VC->>CC : POST /api/conversations/{id}/messages
-CC->>DB : Store Message
-VC->>CC : POST /api/conversations/{id}/read
-CC->>DB : Mark Other Messages as Read
-VC-->>U : Display Real-time Messages
+U->>D : View Medical Documents
+D->>DS : GET /api/pets/{id}/documents
+DS->>DB : Fetch document metadata
+DS->>ST : Generate signed URL
+ST-->>DS : Return temporary access URL
+DS-->>D : Return documents with signed URLs
+U->>D : Upload Document
+D->>DS : POST /api/pets/{id}/documents (multipart)
+DS->>ST : Upload file to storage
+DS->>DB : Store document metadata
+DS-->>D : Return success response
+U->>D : View Document
+D->>ST : Access via signed URL
+ST-->>U : Serve stored file
+U->>D : Delete Document
+D->>DS : DELETE /api/pets/{id}/documents/{docId}
+DS->>ST : Delete file from storage
+DS->>DB : Remove metadata record
+DS-->>D : Return success response
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:264-283](file://app/dashboard/page.tsx#L264-L283)
-- [app/dashboard/page.tsx:285-311](file://app/dashboard/page.tsx#L285-L311)
-- [app/dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
-- [app/dashboard/page.tsx:1509-1650](file://app/dashboard/page.tsx#L1509-L1650)
-- [app/components/VetChatInterface.tsx:56-85](file://app/components/VetChatInterface.tsx#L56-L85)
-- [app/api/appointments/[appointmentId]/route.ts:17-125](file://app/api/appointments/[appointmentId]/route.ts#L17-L125)
-- [app/api/appointments/[appointmentId]/slots/route.ts:15-103](file://app/api/appointments/[appointmentId]/slots/route.ts#L15-L103)
-- [app/api/appointments/[appointmentId]/conversation/route.ts:10-55](file://app/api/appointments/[appointmentId]/conversation/route.ts#L10-L55)
-- [app/api/conversations/[conversationId]/messages/route.ts:5-38](file://app/api/conversations/[conversationId]/messages/route.ts#L5-L38)
-- [app/api/conversations/[conversationId]/read/route.ts:5-41](file://app/api/conversations/[conversationId]/read/route.ts#L5-L41)
-- [app/api/reminders/route.ts:7-16](file://app/api/reminders/route.ts#L7-L16)
-- [app/api/pets/[petId]/health-summary/route.ts:32-192](file://app/api/pets/[petId]/health-summary/route.ts#L32-L192)
-- [app/api/vet/discovery/route.ts:24-192](file://app/api/vet/discovery/route.ts#L24-L192)
+- [app/dashboard/page.tsx:280-331](file://app/dashboard/page.tsx#L280-L331)
+- [app/dashboard/page.tsx:1361-1419](file://app/dashboard/page.tsx#L1361-L1419)
+- [app/api/pets/[petId]/documents/route.ts:42-106](file://app/api/pets/[petId]/documents/route.ts#L42-L106)
+- [app/api/pets/[petId]/documents/route.ts:108-223](file://app/api/pets/[petId]/documents/route.ts#L108-L223)
+- [app/api/pets/[petId]/documents/[documentId]/route.ts:10-67](file://app/api/pets/[petId]/documents/[documentId]/route.ts#L10-L67)
+- [lib/storage.ts:55-87](file://lib/storage.ts#L55-L87)
+- [lib/storage.ts:89-125](file://lib/storage.ts#L89-L125)
 
 ## Detailed Component Analysis
 
@@ -262,22 +284,27 @@ VC-->>U : Display Real-time Messages
 - Upcoming appointment card: Shows next future appointment details with both Reschedule and Cancel options.
 - Recent health activity timeline: Aggregated events from medical records, vaccinations, medications, allergies, conditions, metrics, and appointments.
 - **Enhanced**: Health reminders section displaying pending tasks with due date badges and clearance functionality.
+- **New**: Medical Documents section with upload interface, document listing, signed URL viewing, and delete functionality.
 - **New**: AI Health Summary section with stored health facts and AI-generated interpretations.
 - **New**: Veterinarian Discovery tab with advanced search capabilities.
 - Quick actions: Add new pet and book appointment buttons.
 
 Data flow:
-- On mount, fetch profile, pets, appointments, discovery vets, initial timeline, reminders, and health summary for the first pet.
-- Selecting a pet updates selected pet, AI pet context, reloads timeline, vaccinations, medications, and clears health summary.
+- On mount, fetch profile, pets, appointments, discovery vets, initial timeline, reminders, health summary, and documents for the first pet.
+- Selecting a pet updates selected pet, AI pet context, reloads timeline, vaccinations, medications, and clears health summary and documents.
 - Booking an appointment posts to API and refreshes list.
 - **Updated**: Reschedule functionality uses slot-based selection with dynamic time slot grid instead of datetime picker.
 - **Updated**: Health reminders automatically refresh when vaccinations or medications are added.
+- **New**: Medical Documents load automatically when pet is selected and display with signed URLs for viewing.
+- **New**: Document upload triggers file validation, storage upload, and metadata persistence.
 - **New**: AI Health Summary generates structured overviews combining stored facts with AI interpretations.
 - **New**: Veterinarian Discovery provides filtered searches with real-time availability checking.
 
 Error handling:
 - Displays error or success banners for user feedback.
 - Redirects to home if profile fetch fails (unauthenticated).
+- **Updated**: Handles storage configuration errors gracefully with appropriate user feedback.
+- **Updated**: Validates file types and sizes before upload attempts.
 
 Responsive behavior:
 - Uses Tailwind grid and flex layouts to adapt across screen sizes.
@@ -285,9 +312,49 @@ Responsive behavior:
 **Section sources**
 - [app/dashboard/page.tsx:76-144](file://app/dashboard/page.tsx#L76-L144)
 - [app/dashboard/page.tsx:194-220](file://app/dashboard/page.tsx#L194-L220)
-- [app/dashboard/page.tsx:1292-1431](file://app/dashboard/page.tsx#L1292-L1431)
-- [app/dashboard/page.tsx:1509-1650](file://app/dashboard/page.tsx#L1509-L1650)
+- [app/dashboard/page.tsx:1361-1419](file://app/dashboard/page.tsx#L1361-L1419)
+- [app/dashboard/page.tsx:1421-1549](file://app/dashboard/page.tsx#L1421-L1549)
 - [app/dashboard/page.tsx:721-795](file://app/dashboard/page.tsx#L721-L795)
+
+### Medical Document Management
+- **New Feature**: Comprehensive medical document management system for storing and accessing pet health records.
+- **New Feature**: Secure file upload with validation for PDF, PNG, JPEG, and WebP formats up to 10 MB.
+- **New Feature**: Cloud storage integration using Supabase Storage with automatic bucket creation and management.
+- **New Feature**: Time-limited signed URLs (1 hour expiration) for secure document viewing.
+- **New Feature**: Owner-only access controls ensuring only pet owners can upload, view, and delete documents.
+
+Features:
+- File upload interface with drag-and-drop support and file type validation.
+- Document listing showing file names, types, upload dates, and uploader information.
+- Signed URL generation for secure document viewing in new browser tabs.
+- Delete functionality with confirmation prompts and cascading storage cleanup.
+- Error handling for storage configuration issues and network failures.
+
+Operations:
+- Upload document: POST multipart form data to `/api/pets/{petId}/documents` endpoint.
+- List documents: GET request to `/api/pets/{petId}/documents` returns metadata with signed URLs.
+- Delete document: DELETE request to `/api/pets/{petId}/documents/{documentId}` removes both metadata and stored file.
+- View document: Direct access via signed URL to stored file in Supabase Storage.
+
+Validation and security:
+- File size validation (10 MB limit) and MIME type checking.
+- Authentication required for all operations with role-based authorization.
+- Ownership verification ensures users can only access their own pets' documents.
+- Sanitized file naming prevents path traversal and special character issues.
+
+Display features:
+- Clean card-based layout with file type badges and uploader information.
+- Responsive design adapting to different screen sizes.
+- Empty state guidance encouraging users to upload their first document.
+- Loading states during upload operations with appropriate feedback.
+
+**Section sources**
+- [app/dashboard/page.tsx:64-67](file://app/dashboard/page.tsx#L64-L67)
+- [app/dashboard/page.tsx:280-331](file://app/dashboard/page.tsx#L280-L331)
+- [app/dashboard/page.tsx:1361-1419](file://app/dashboard/page.tsx#L1361-L1419)
+- [app/api/pets/[petId]/documents/route.ts:16-223](file://app/api/pets/[petId]/documents/route.ts#L16-L223)
+- [app/api/pets/[petId]/documents/[documentId]/route.ts:6-67](file://app/api/pets/[petId]/documents/[documentId]/route.ts#L6-L67)
+- [lib/storage.ts:1-125](file://lib/storage.ts#L1-L125)
 
 ### Pet Portfolio Management
 - Lists all pets with selection highlighting and improved visual indicators.
@@ -492,6 +559,7 @@ Error handling:
 - **Updated**: Rescheduling dependencies include new slots API for availability calculation, appointment validation, conflict detection, and status management.
 - **Updated**: Conversation management dependencies include message polling, read status tracking, and real-time updates.
 - **Updated**: Health reminders dependencies include reminder CRUD operations with proper ownership validation.
+- **New**: Medical document management dependencies include Supabase Storage integration, file validation, signed URL generation, and secure access controls.
 - **New**: AI Health Summary dependencies include AI provider integration, structured data extraction, and error handling for AI failures.
 - **New**: Veterinarian Discovery dependencies include complex filtering logic, availability calculations, and timezone-aware date handling.
 
@@ -508,11 +576,13 @@ D --> CH["Chat Tab"]
 D --> RM["Reminders API"]
 D --> HS["Health Summary API"]
 D --> VD["Vet Discovery API"]
+D --> DM["Documents API"]
 CH --> VCI["VetChatInterface"]
 VCI --> CA["Conversation API"]
 CA --> M["Messages API"]
 CA --> RD["Read Status API"]
 RM --> RMD["Reminder Delete API"]
+DM --> DS["Supabase Storage"]
 P --> AUTH["Auth"]
 A --> AUTH
 AR --> AUTH
@@ -528,6 +598,8 @@ RM --> AUTH
 RMD --> AUTH
 HS --> AUTH
 VD --> AUTH
+DM --> AUTH
+DS --> AUTH
 P --> DB["Prisma + Schema"]
 A --> DB
 AR --> DB
@@ -542,10 +614,11 @@ RM --> DB
 RMD --> DB
 HS --> DB
 VD --> DB
+DM --> DB
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:1-2358](file://app/dashboard/page.tsx#L1-L2358)
+- [app/dashboard/page.tsx:1-2487](file://app/dashboard/page.tsx#L1-L2487)
 - [app/components/VetChatInterface.tsx:1-222](file://app/components/VetChatInterface.tsx#L1-L222)
 - [app/api/pets/route.ts:1-69](file://app/api/pets/route.ts#L1-L69)
 - [app/api/appointments/route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
@@ -562,6 +635,9 @@ VD --> DB
 - [app/api/reminders/[reminderId]/route.ts:1-46](file://app/api/reminders/[reminderId]/route.ts#L1-L46)
 - [app/api/pets/[petId]/health-summary/route.ts:1-206](file://app/api/pets/[petId]/health-summary/route.ts#L1-L206)
 - [app/api/vet/discovery/route.ts:1-206](file://app/api/vet/discovery/route.ts#L1-L206)
+- [app/api/pets/[petId]/documents/route.ts:1-223](file://app/api/pets/[petId]/documents/route.ts#L1-L223)
+- [app/api/pets/[petId]/documents/[documentId]/route.ts:1-67](file://app/api/pets/[petId]/documents/[documentId]/route.ts#L1-L67)
+- [lib/storage.ts:1-125](file://lib/storage.ts#L1-L125)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [prisma/schema.prisma:1-312](file://prisma/schema.prisma#L1-L312)
 
@@ -583,9 +659,11 @@ VD --> DB
 - **Updated**: Conversation listing with unread count optimization using database-level counting.
 - **Updated**: Health reminders refresh only when necessary (after vaccination/medication additions) to minimize API calls.
 - **Updated**: Due date calculations performed client-side using efficient mathematical operations.
-- **New**: AI Health Summary uses parallel queries to fetch multiple health data types simultaneously.
-- **New**: Veterinarian Discovery implements server-side filtering to reduce client-side processing overhead.
-- **New**: Availability calculations optimized with efficient date range queries and busy slot caching.
+- **New**: Medical document operations optimized with batch signed URL generation and efficient storage queries.
+- **New**: File upload validation performed client-side to prevent unnecessary server requests.
+- **New**: Document listing uses parallel signed URL generation for better performance.
+- **New**: Storage bucket creation cached to avoid repeated initialization overhead.
+- **New**: Signed URL expiration set to 1 hour balancing security with usability.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -601,9 +679,12 @@ Common issues and resolutions:
 - **Updated**: Message delivery problems: Check network connectivity and server response times; implement retry logic for failed message sends.
 - **Updated**: Reminder clearance issues: Verify reminder ownership and proper authentication before deletion attempts.
 - **Updated**: Vaccination/medication form validation: Ensure all required fields are properly filled and formatted before submission.
-- **New**: AI Health Summary errors: Check AI provider availability and handle graceful fallback to stored facts only.
-- **New**: Veterinarian Discovery issues: Verify date format (YYYY-MM-DD), check timezone handling, and ensure proper authentication.
-- **New**: Availability calculation problems: Confirm working hours configuration and timezone settings for accurate slot calculations.
+- **New**: Document upload issues: Check file size (10 MB limit), supported file types (PDF, PNG, JPEG, WebP), and storage configuration.
+- **New**: Signed URL problems: Verify storage is configured and accessible; check file permissions and bucket settings.
+- **New**: Document deletion errors: Ensure user owns the document and storage service is available for file cleanup.
+- **New**: Storage configuration errors: Verify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are set correctly.
+- **New**: File validation failures: Check MIME types and file extensions match allowed formats.
+- **New**: Bucket creation issues: Ensure storage service is accessible and has proper credentials.
 
 Error handling patterns:
 - Consistent error objects returned by APIs with code and message.
@@ -612,8 +693,10 @@ Error handling patterns:
 - **Updated**: Comprehensive error handling for modal dialogs with user-friendly error messages.
 - **Updated**: Fallback UI states for slot loading failures and network interruptions.
 - **Updated**: Proper error handling for reminder operations with clear user feedback.
-- **New**: AI provider failure handling with informative error messages and fallback to stored facts.
-- **New**: Filter validation for veterinarian discovery with clear error messages for invalid inputs.
+- **New**: Storage error handling with informative messages about configuration requirements.
+- **New**: File upload error handling with specific guidance about supported formats and size limits.
+- **New**: Signed URL error handling with fallback to document listing without view links.
+- **New**: Graceful degradation when storage service is unavailable while maintaining document metadata access.
 
 **Section sources**
 - [app/dashboard/page.tsx:76-144](file://app/dashboard/page.tsx#L76-L144)
@@ -629,10 +712,12 @@ Error handling patterns:
 - [app/api/reminders/[reminderId]/route.ts:33-43](file://app/api/reminders/[reminderId]/route.ts#L33-L43)
 - [app/api/pets/[petId]/health-summary/route.ts:193-204](file://app/api/pets/[petId]/health-summary/route.ts#L193-L204)
 - [app/api/vet/discovery/route.ts:193-204](file://app/api/vet/discovery/route.ts#L193-L204)
+- [app/api/pets/[petId]/documents/route.ts:137-142](file://app/api/pets/[petId]/documents/route.ts#L137-L142)
+- [lib/storage.ts:23-25](file://lib/storage.ts#L23-L25)
 
 ## Conclusion
-The Pet Owner Dashboard integrates comprehensive health overview, pet portfolio management, appointment scheduling and slot-based rescheduling, health reminders and tracking, AI health summaries, veterinarian discovery, and an AI-powered assistant with robust authentication, authorization, and error handling. Its responsive design ensures usability across devices, while efficient data fetching and streaming AI responses deliver a smooth user experience. The modular architecture separates concerns between client UI, API routes, and data layer, enabling maintainability and scalability.
+The Pet Owner Dashboard integrates comprehensive health overview, pet portfolio management, appointment scheduling and slot-based rescheduling, health reminders and tracking, AI health summaries, veterinarian discovery, medical document management, and an AI-powered assistant with robust authentication, authorization, and error handling. Its responsive design ensures usability across devices, while efficient data fetching and streaming AI responses deliver a smooth user experience. The modular architecture separates concerns between client UI, API routes, and data layer, enabling maintainability and scalability.
 
-**Updated** The addition of comprehensive health reminders, vaccination and medication tracking systems, AI Health Summary section, and Veterinarian Discovery tab significantly enhances the platform's proactive health management capabilities. The new AI Health Summary provides users with structured health overviews combining stored facts with AI-generated interpretations, while the Veterinarian Discovery tab offers advanced search capabilities with real-time availability checking. Combined with the enhanced pet selection improvements, dedicated chat tab with complete conversation management, and the enhanced slot-based rescheduling workflow, the dashboard now provides a comprehensive health management solution that seamlessly integrates preventive care tracking, AI-powered insights, veterinarian discovery, appointment scheduling, and veterinary communication capabilities. The real-time messaging system, automatic reminder generation, enhanced health tracking features, and AI-powered health summaries work together to create a complete pet healthcare management platform that helps pet owners stay organized, informed, and proactive about their pets' health needs.
+**Updated** The addition of comprehensive medical document management capabilities significantly enhances the platform's ability to store and organize pet health records securely. The new document system provides secure cloud storage with time-limited access through signed URLs, comprehensive file validation, and owner-only access controls. Combined with existing health reminders, vaccination and medication tracking systems, AI Health Summary section, and Veterinarian Discovery tab, the dashboard now provides a complete healthcare management solution that seamlessly integrates preventive care tracking, AI-powered insights, veterinarian discovery, appointment scheduling, veterinary communication, and secure medical record management. The real-time messaging system, automatic reminder generation, enhanced health tracking features, AI-powered health summaries, and comprehensive document management work together to create a complete pet healthcare management platform that helps pet owners stay organized, informed, and proactive about their pets' health needs while maintaining strict security and privacy standards for sensitive medical information.
 
 [No sources needed since this section summarizes without analyzing specific files]

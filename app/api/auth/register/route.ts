@@ -2,20 +2,42 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { hashPassword, generateSessionToken, createSession, setSessionCookie } from '@/lib/auth';
 import { UserRole } from '@prisma/client';
+import { checkRateLimit, getRateLimitResetSeconds } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, role, firstName, lastName, phone } = await req.json();
+    // Rate limit: max 5 registrations per 15 min per IP
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const allowed = checkRateLimit(`register:${ip}`, 5, 15 * 60 * 1000);
+    if (!allowed) {
+      const retryAfter = getRateLimitResetSeconds(`register:${ip}`);
+      return NextResponse.json(
+        { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Too many registration attempts. Please try again later.' } },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { email, password, role, firstName, lastName, phone } = body ?? {};
 
     // Input validation
-    if (!email || !password || !role || !firstName || !lastName) {
+    if (!email || !password || !role || !firstName || !lastName ||
+        typeof email !== 'string' || typeof password !== 'string' ||
+        typeof role !== 'string' || typeof firstName !== 'string' || typeof lastName !== 'string') {
       return NextResponse.json(
         { success: false, error: { code: 'BAD_REQUEST', message: 'Missing required fields.' } },
         { status: 400 }
       );
     }
 
-    if (!Object.values(UserRole).includes(role)) {
+    if (email.length > 255 || firstName.length > 100 || lastName.length > 100) {
+      return NextResponse.json(
+        { success: false, error: { code: 'BAD_REQUEST', message: 'Input values are too long.' } },
+        { status: 400 }
+      );
+    }
+
+    if (!Object.values(UserRole).includes(role as UserRole)) {
       return NextResponse.json(
         { success: false, error: { code: 'BAD_REQUEST', message: 'Invalid role provided.' } },
         { status: 400 }
@@ -29,8 +51,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (password.length > 128) {
+      return NextResponse.json(
+        { success: false, error: { code: 'BAD_REQUEST', message: 'Password is too long.' } },
+        { status: 400 }
+      );
+    }
+
     // Check if user already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (existingUser) {
       return NextResponse.json(
         { success: false, error: { code: 'CONFLICT', message: 'User with this email already exists.' } },
@@ -42,12 +71,12 @@ export async function POST(req: NextRequest) {
     const passwordHash = await hashPassword(password);
     const user = await prisma.user.create({
       data: {
-        email,
+        email: email.toLowerCase().trim(),
         passwordHash,
         role: role as UserRole,
         firstName,
         lastName,
-        phone,
+        phone: typeof phone === 'string' ? phone.slice(0, 30) : undefined,
       },
     });
 

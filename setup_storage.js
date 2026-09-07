@@ -57,7 +57,10 @@ function isValidKey(k) {
   let res = await fetch(base + '/storage/v1/bucket/pet-documents', { headers });
   console.log('Bucket check status:', res.status);
 
-  if (res.status === 404) {
+  const bodyText = await res.text();
+  const isNotFound = res.status === 404 || (res.status === 400 && bodyText.includes('NoSuchBucket'));
+
+  if (isNotFound) {
     res = await fetch(base + '/storage/v1/bucket', {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
@@ -68,13 +71,13 @@ function isValidKey(k) {
         allowed_mime_types: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'],
       }),
     });
-    const body = await res.text();
-    console.log('Bucket create status:', res.status, body.slice(0, 200));
+    const createBody = await res.text();
+    console.log('Bucket create status:', res.status, createBody.slice(0, 200));
     if (!res.ok && res.status !== 409) process.exit(4);
   } else if (res.ok) {
-    console.log('Bucket already exists:', (await res.text()).slice(0, 200));
+    console.log('Bucket already exists:', bodyText.slice(0, 200));
   } else {
-    console.log('KEY_VALIDATION_FAILED:', (await res.text()).slice(0, 300));
+    console.log('KEY_VALIDATION_FAILED:', bodyText.slice(0, 300));
     process.exit(5);
   }
   console.log('STORAGE_READY');

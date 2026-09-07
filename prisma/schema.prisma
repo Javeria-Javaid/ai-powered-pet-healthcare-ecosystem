@@ -28,30 +28,31 @@ enum AppointmentStatus {
 }
 
 model User {
-  id                 String                 @id @default(uuid())
-  email              String                 @unique
-  passwordHash       String?
-  role               UserRole
-  firstName          String
-  lastName           String
-  phone              String?
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-  pets               Pet[]
-  vetProfile         Veterinarian?          @relation("VetUser")
-  appointments       Appointment[]
-  notifications      Notification[]
-  reminders          Reminder[]
-  conversations      AIConversation[]
-  auditLogs          AuditLog[]             @relation("AuditUser")
-  ownerConversations Conversation[]         @relation("OwnerConversations")
-  sentMessages       Message[]              @relation("SentMessages")
-  editedVersions     MedicalRecordVersion[]
-  uploadedDocs       Document[]
-  sessions           Session[]
-  verifiedVets       Veterinarian[]         @relation("Verifier")
-  clinicId           String?
-  clinic             Clinic?                @relation("ClinicAdmins", fields: [clinicId], references: [id], onDelete: SetNull)
+  id                  String                 @id @default(uuid())
+  email               String                 @unique
+  passwordHash        String?
+  role                UserRole
+  firstName           String
+  lastName            String
+  phone               String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  pets                Pet[]
+  vetProfile          Veterinarian?          @relation("VetUser")
+  appointments        Appointment[]
+  notifications       Notification[]
+  reminders           Reminder[]
+  conversations       AIConversation[]
+  auditLogs           AuditLog[]             @relation("AuditUser")
+  ownerConversations  Conversation[]         @relation("OwnerConversations")
+  sentMessages        Message[]              @relation("SentMessages")
+  editedVersions      MedicalRecordVersion[]
+  uploadedDocs        Document[]
+  sessions            Session[]
+  verifiedVets        Veterinarian[]         @relation("Verifier")
+  clinicId            String?
+  clinic              Clinic?                @relation("ClinicAdmins", fields: [clinicId], references: [id], onDelete: SetNull)
+  passwordResetTokens PasswordResetToken[]
 }
 
 model Session {
@@ -62,6 +63,19 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  consumed  Boolean  @default(false)
 
   @@index([userId])
   @@index([expiresAt])

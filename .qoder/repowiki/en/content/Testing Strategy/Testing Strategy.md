@@ -10,8 +10,16 @@
 - [prisma/schema.prisma](file://prisma/schema.prisma)
 - [app/api/auth/login/route.ts](file://app/api/auth/login/route.ts)
 - [app/api/appointments/route.ts](file://app/api/appointments/route.ts)
-- [test_booking.ts](file://test_booking.ts)
+- [test_db_conn.js](file://test_db_conn.js)
+- [run_test.js](file://run_test.js)
+- [verify_dashboard_data.js](file://verify_dashboard_data.js)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Removed references to Puppeteer-based automation scripts (capture_evidence.js, diag_summary.js) as these development utilities are no longer part of the codebase
+- Updated testing strategy to focus on unit, integration, and end-to-end testing approaches without browser automation dependencies
+- Clarified that while Puppeteer is still a dependency, it's not actively used for automated testing workflows
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -28,12 +36,14 @@
 ## Introduction
 This document defines the testing strategy for PETIVA, covering unit, integration, and end-to-end testing across authentication, AI interactions, API endpoints, database operations, and critical user workflows such as appointment booking and pet profile management. It also outlines test utilities, data management practices, CI setup guidance, coverage requirements, and performance testing approaches tailored to this Next.js application with Prisma and external AI providers.
 
+**Updated** The testing strategy has been streamlined to focus on core testing methodologies without relying on Puppeteer-based automation scripts that were previously referenced but are no longer part of the active codebase.
+
 ## Project Structure
 PETIVA is a Next.js application using:
 - Server-side APIs under app/api
 - Shared libraries for auth, database, and AI integrations under lib
 - Prisma schema defining domain models and relationships
-- A small ad-hoc script for manual integration tests
+- Ad-hoc test scripts for manual integration testing and verification
 
 ```mermaid
 graph TB
@@ -68,10 +78,10 @@ F --> G
 - [app/api/appointments/route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [lib/db.ts:1-33](file://lib/db.ts#L1-L33)
-- [lib/ai.ts:1-467](file://lib/ai.ts#L1-L467)
+- [lib/ai.ts:1-470](file://lib/ai.ts#L1-L470)
 
 **Section sources**
-- [package.json:1-35](file://package.json#L1-L35)
+- [package.json:1-36](file://package.json#L1-L36)
 - [next.config.ts:1-8](file://next.config.ts#L1-L8)
 
 ## Core Components
@@ -89,7 +99,7 @@ Key responsibilities and test targets:
 **Section sources**
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [lib/db.ts:1-33](file://lib/db.ts#L1-L33)
-- [lib/ai.ts:1-467](file://lib/ai.ts#L1-L467)
+- [lib/ai.ts:1-470](file://lib/ai.ts#L1-L470)
 - [app/api/auth/login/route.ts:1-58](file://app/api/auth/login/route.ts#L1-L58)
 - [app/api/appointments/route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
 
@@ -231,10 +241,10 @@ AIOrchestrator --> FallbackProvider : "uses if configured"
 ```
 
 **Diagram sources**
-- [lib/ai.ts:1-467](file://lib/ai.ts#L1-L467)
+- [lib/ai.ts:1-470](file://lib/ai.ts#L1-L470)
 
 **Section sources**
-- [lib/ai.ts:1-467](file://lib/ai.ts#L1-L467)
+- [lib/ai.ts:1-470](file://lib/ai.ts#L1-L470)
 
 ### Data Model and Relationships
 The Prisma schema defines core entities and constraints relevant to testing:
@@ -287,19 +297,17 @@ Prisma --> PG["PostgreSQL"]
 - [app/api/appointments/route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [lib/db.ts:1-33](file://lib/db.ts#L1-L33)
-- [lib/ai.ts:1-467](file://lib/ai.ts#L1-L467)
+- [lib/ai.ts:1-470](file://lib/ai.ts#L1-L470)
 
 **Section sources**
 - [lib/db.ts:1-33](file://lib/db.ts#L1-L33)
-- [lib/ai.ts:1-467](file://lib/ai.ts#L1-L467)
+- [lib/ai.ts:1-470](file://lib/ai.ts#L1-L470)
 
 ## Performance Considerations
 - Connection pooling: The DB module uses a single pool per process in development and a dedicated pool in production; tests should reuse pools where possible and ensure proper teardown.
 - Transactional writes: Appointment creation uses a transaction to prevent race conditions; tests should assert both success and contention scenarios.
 - External AI latency: When testing AI flows, mock provider calls to avoid flakiness and measure internal logic performance without network variance.
 - Load/stress testing: For high-throughput scenarios (e.g., many concurrent booking attempts), use load testing tools to simulate concurrent requests and monitor DB locks and API throughput.
-
-[No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
 Common issues and how to diagnose them:
@@ -317,12 +325,12 @@ Common issues and how to diagnose them:
 **Section sources**
 - [lib/auth.ts:1-125](file://lib/auth.ts#L1-L125)
 - [app/api/appointments/route.ts:1-143](file://app/api/appointments/route.ts#L1-L143)
-- [lib/ai.ts:1-467](file://lib/ai.ts#L1-L467)
+- [lib/ai.ts:1-470](file://lib/ai.ts#L1-L470)
 
 ## Conclusion
 A robust testing strategy for PETIVA combines unit tests for utilities and business rules, integration tests for API endpoints and database interactions, and end-to-end tests for critical user journeys. Leveraging the existing libraries and schema ensures consistent, reliable tests that protect authentication, scheduling, and AI-driven features. Adopting clear organization, naming conventions, and CI automation will improve confidence and maintainability as the platform evolves.
 
-[No sources needed since this section summarizes without analyzing specific files]
+**Updated** The testing approach remains focused on core functionality without reliance on Puppeteer-based automation scripts, emphasizing direct API testing and database interaction verification.
 
 ## Appendices
 
@@ -335,6 +343,7 @@ A robust testing strategy for PETIVA combines unit tests for utilities and busin
 - Database seeding and cleanup utilities to prepare isolated environments per test suite
 - Session helpers to create authenticated contexts without real cookies
 - AI mocking utilities to stub provider responses and tool executions deterministically
+- **Updated** Browser automation utilities have been removed from the active testing workflow
 
 ### Test Data Management
 - Fixtures for users, pets, vets, clinics, and appointments aligned with the Prisma schema
@@ -354,5 +363,7 @@ A robust testing strategy for PETIVA combines unit tests for utilities and busin
 - AI interaction testing: invoke executeTool with controlled inputs and assert outputs and side effects
 
 **Section sources**
-- [test_booking.ts:1-149](file://test_booking.ts#L1-L149)
-- [package.json:1-35](file://package.json#L1-L35)
+- [test_db_conn.js:1-49](file://test_db_conn.js#L1-L49)
+- [run_test.js:1-30](file://run_test.js#L1-L30)
+- [verify_dashboard_data.js:1-28](file://verify_dashboard_data.js#L1-L28)
+- [package.json:1-36](file://package.json#L1-L36)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getAIProvider, BOOKING_ASSISTANT_PROVIDER } from '@/lib/ai';
+import { checkRateLimit, getRateLimitResetSeconds } from '@/lib/rate-limit';
 
 // GET /api/pets/[petId]/health-summary — AI Medical History Summary (blueprint Section 19).
 // Pulls the pet's structured health history (conditions, consultations, treatments,
@@ -35,6 +36,17 @@ export async function GET(
 ) {
   try {
     const user = await requireAuth();
+
+    // Rate limit: max 10 summary generations per 15 min per user
+    const rateLimitKey = `health-summary:${user.id}`;
+    if (!checkRateLimit(rateLimitKey, 10, 15 * 60 * 1000)) {
+      const retryAfter = getRateLimitResetSeconds(rateLimitKey);
+      return NextResponse.json(
+        { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Rate limit exceeded. Please wait before generating another summary.' } },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+      );
+    }
+
     const { petId } = await params;
 
     const pet = await prisma.pet.findUnique({ where: { id: petId } });

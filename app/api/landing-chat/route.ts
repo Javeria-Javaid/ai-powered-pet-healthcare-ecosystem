@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit, getRateLimitResetSeconds } from '@/lib/rate-limit';
+import { GeminiProvider } from '@/lib/ai/providers/gemini';
 
 const FALLBACK_MODELS = [
   'openrouter/free',
@@ -53,13 +55,48 @@ async function callOpenRouter(messages: any[], modelIndex: number = 0): Promise<
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json();
+    // Rate limit: max 10 requests per minute per IP
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const rateLimitKey = `landing-chat:${ip}`;
+    if (!checkRateLimit(rateLimitKey, 10, 60 * 1000)) {
+      const retryAfter = getRateLimitResetSeconds(rateLimitKey);
+      return NextResponse.json(
+        { success: false, error: 'Too many requests. Please wait a moment before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+      );
+    }
 
-    if (!messages || !Array.isArray(messages)) {
+    const body = await req.json().catch(() => ({}));
+    const { messages } = body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Messages array is required.' },
         { status: 400 }
       );
+    }
+
+    if (messages.length > 15) {
+      return NextResponse.json(
+        { success: false, error: 'Too many messages in history.' },
+        { status: 400 }
+      );
+    }
+
+    // Validate each message structure and length
+    for (const msg of messages) {
+      if (!msg || typeof msg !== 'object' || typeof msg.content !== 'string' || !['user', 'assistant'].includes(msg.role)) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid message structure.' },
+          { status: 400 }
+        );
+      }
+      if (msg.content.length > 1000) {
+        return NextResponse.json(
+          { success: false, error: 'Message content exceeds maximum allowed length of 1000 characters.' },
+          { status: 400 }
+        );
+      }
     }
 
     const systemPrompt = {
@@ -83,7 +120,6 @@ Do not use emojis in responses.`,
     console.error('Landing chat error:', err.message);
     try {
       console.log('OpenRouter chain exhausted. Triggering Gemini fallback...');
-      const { GeminiProvider } = require('@/lib/ai/providers/gemini');
       const gemini = new GeminiProvider();
       const systemPrompt = {
         role: 'system',

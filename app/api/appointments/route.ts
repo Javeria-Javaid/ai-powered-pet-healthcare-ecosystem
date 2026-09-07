@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { AppointmentStatus } from '@prisma/client';
+import { checkRateLimit, getRateLimitResetSeconds } from '@/lib/rate-limit';
+
 
 // GET /api/appointments - Retrieve appointments sorted by date/time
 export async function GET(req: NextRequest) {
@@ -78,6 +80,17 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
+
+    // Rate limit: max 10 appointment creations per 15 min per user
+    const rateLimitKey = `appointments-create:${user.id}`;
+    if (!checkRateLimit(rateLimitKey, 10, 15 * 60 * 1000)) {
+      const retryAfter = getRateLimitResetSeconds(rateLimitKey);
+      return NextResponse.json(
+        { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Too many appointment requests. Please try again later.' } },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+      );
+    }
+
     const { petId, vetId, clinicId, dateTime, reason } = await req.json();
 
     if (!petId || !vetId || !clinicId || !dateTime || !reason) {
@@ -86,6 +99,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
 
     const apptDate = new Date(dateTime);
 

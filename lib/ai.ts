@@ -1,4 +1,3 @@
-import { requireAuth } from './auth';
 import { prisma } from './db';
 
 export interface AIMessageParam {
@@ -67,7 +66,7 @@ export class OpenRouterProvider implements AIProvider {
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'http://localhost:3000', // Required by OpenRouter
+        'HTTP-Referer': 'http://localhost:3000',
         'X-Title': 'Pet Healthcare Ecosystem',
       },
       body: JSON.stringify(payload),
@@ -94,11 +93,7 @@ export class OpenRouterProvider implements AIProvider {
       },
     })) : undefined;
 
-    return {
-      role: 'assistant',
-      content: msg.content || '',
-      toolCalls,
-    };
+    return { role: 'assistant', content: msg.content || '', toolCalls };
   }
 }
 
@@ -106,7 +101,6 @@ import { GeminiProvider } from './ai/providers/gemini';
 import { QwenProvider } from './ai/providers/qwen';
 import { GroqProvider } from './ai/providers/groq';
 
-// Config flag to swap between Qwen, Groq, and Gemini
 export const BOOKING_ASSISTANT_PROVIDER = process.env.BOOKING_ASSISTANT_PROVIDER || 'groq';
 
 class FallbackProvider {
@@ -117,32 +111,25 @@ class FallbackProvider {
     try {
       return await this.primary.generateResponse(messages, tools);
     } catch (error) {
-      console.warn('[AI DIAGNOSTIC] Groq failed, falling back to Gemini:', error);
+      console.warn('[AI] Groq failed, falling back to Gemini:', error);
       return await this.secondary.generateResponse(messages, tools);
     }
   }
 }
 
-// Get the active provider instance
 export function getAIProvider(): any {
-  console.log(`[AI DIAGNOSTIC] Serving assistant request with provider: ${BOOKING_ASSISTANT_PROVIDER.toUpperCase()}`);
-  if (BOOKING_ASSISTANT_PROVIDER === 'qwen') {
-    return new QwenProvider();
-  }
-  if (BOOKING_ASSISTANT_PROVIDER === 'gemini') {
-    return new GeminiProvider();
-  }
-  // Default to FallbackProvider for groq to handle rate limits gracefully
+  if (BOOKING_ASSISTANT_PROVIDER === 'qwen') return new QwenProvider();
+  if (BOOKING_ASSISTANT_PROVIDER === 'gemini') return new GeminiProvider();
   return new FallbackProvider();
 }
 
-// Define the tool descriptions for the LLM
+// Tool definitions for the LLM
 export const AI_TOOLS = [
   {
     type: 'function',
     function: {
       name: 'getMyPets',
-      description: 'Get logged in user\'s pets.',
+      description: "Get logged in user's pets.",
       parameters: { type: 'object', properties: {} },
     },
   },
@@ -174,13 +161,13 @@ export const AI_TOOLS = [
     type: 'function',
     function: {
       name: 'find_vet',
-      description: 'Search veterinarians by specialization (e.g. General, Cardiology).',
+      description: 'Search veterinarians by specialization.',
       parameters: {
         type: 'object',
         properties: {
           specialization: {
             type: ['string', 'null'],
-            description: 'Optional. Only include this if the user specifically requests a specialty (e.g. surgery, dermatology). Omit this parameter entirely if not specified \u2014 do not pass null.',
+            description: 'Optional specialization filter. Omit if not specified.',
           },
         },
       },
@@ -235,45 +222,79 @@ export const AI_TOOLS = [
   },
 ];
 
-// Helper to verify that a pet belongs to the currently logged in owner
+// ── Validation helpers ─────────────────────────────────────────────────────────
+
+/** Validate that a string looks like a plausible UUID (not empty, not too long) */
+function validateId(value: unknown, fieldName: string): string {
+  if (!value || typeof value !== 'string') {
+    throw new Error(`Missing or invalid parameter: ${fieldName}`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > 36) {
+    throw new Error(`Invalid ${fieldName}: value out of expected length range.`);
+  }
+  // Basic UUID or cuid format check (alphanumeric, hyphens)
+  if (!/^[a-zA-Z0-9-_]+$/.test(trimmed)) {
+    throw new Error(`Invalid ${fieldName}: unexpected characters detected.`);
+  }
+  return trimmed;
+}
+
+/** Verify that a pet belongs to the given user */
 async function verifyPetOwnership(petId: string, userId: string) {
   const pet = await prisma.pet.findUnique({
     where: { id: petId },
     select: { ownerId: true },
   });
-  if (!pet) {
-    throw new Error('Pet not found.');
-  }
-  if (pet.ownerId !== userId) {
-    throw new Error('Access Denied: You do not own this pet.');
-  }
+  if (!pet) throw new Error('Pet not found.');
+  if (pet.ownerId !== userId) throw new Error('Access Denied: You do not own this pet.');
 }
 
-// Execute a tool requested by the AI
+/** Verify that a vet exists (used in create_booking to prevent phantom IDs) */
+async function verifyVetExists(vetId: string): Promise<void> {
+  const vet = await prisma.veterinarian.findUnique({ where: { id: vetId }, select: { id: true } });
+  if (!vet) throw new Error('Veterinarian not found.');
+}
+
+/** Verify that a clinic exists and is associated with the given vet */
+async function verifyClinicForVet(clinicId: string, vetId: string): Promise<void> {
+  const assoc = await prisma.vetClinicAssociation.findFirst({
+    where: { clinicId, vetId, status: 'ACTIVE' },
+    select: { id: true },
+  });
+  if (!assoc) throw new Error('Clinic not found or not associated with the selected veterinarian.');
+}
+
+// ── Tool executor ─────────────────────────────────────────────────────────────
+
 export async function executeTool(name: string, argsStr: string, userId: string): Promise<string> {
-  const args = JSON.parse(argsStr || '{}');
-  console.log(`[AI DIAGNOSTIC - TOOL START] Name: ${name}, Args:`, args);
+  let args: any;
+  try {
+    args = JSON.parse(argsStr || '{}');
+  } catch {
+    throw new Error(`Invalid JSON arguments for tool ${name}`);
+  }
 
   switch (name) {
     case 'getMyPets': {
       const pets = await prisma.pet.findMany({
         where: { ownerId: userId },
-        select: { id: true, name: true, species: true, breed: true }
+        select: { id: true, name: true, species: true, breed: true },
       });
       return JSON.stringify({ success: true, pets });
     }
+
     case 'getPetProfile': {
-      const { petId } = args;
-      if (!petId) throw new Error('Missing parameter: petId');
+      const petId = validateId(args.petId, 'petId');
       await verifyPetOwnership(petId, userId);
       const pet = await prisma.pet.findUnique({ where: { id: petId } });
       return JSON.stringify({ success: true, pet });
     }
+
     case 'getPetHealthTimeline': {
-      const { petId } = args;
-      if (!petId) throw new Error('Missing parameter: petId');
+      const petId = validateId(args.petId, 'petId');
       await verifyPetOwnership(petId, userId);
-      
+
       const [records, vaccinations, medications, allergies, conditions, metrics, appointments] = await Promise.all([
         prisma.medicalRecord.findMany({ where: { petId }, include: { versions: { where: { isCurrent: true } } } }),
         prisma.vaccination.findMany({ where: { petId } }),
@@ -286,76 +307,87 @@ export async function executeTool(name: string, argsStr: string, userId: string)
 
       return JSON.stringify({
         success: true,
-        timeline: { records, vaccinations, medications, allergies, conditions, metrics, appointments }
+        timeline: { records, vaccinations, medications, allergies, conditions, metrics, appointments },
       });
     }
+
     case 'getPetVaccinations': {
-      const { petId } = args;
-      if (!petId) throw new Error('Missing parameter: petId');
+      const petId = validateId(args.petId, 'petId');
       await verifyPetOwnership(petId, userId);
       const vaccinations = await prisma.vaccination.findMany({ where: { petId } });
       return JSON.stringify({ success: true, vaccinations });
     }
+
     case 'getPetMedications': {
-      const { petId } = args;
-      if (!petId) throw new Error('Missing parameter: petId');
+      const petId = validateId(args.petId, 'petId');
       await verifyPetOwnership(petId, userId);
       const medications = await prisma.medication.findMany({ where: { petId } });
       return JSON.stringify({ success: true, medications });
     }
+
     case 'getPetAllergies': {
-      const { petId } = args;
-      if (!petId) throw new Error('Missing parameter: petId');
+      const petId = validateId(args.petId, 'petId');
       await verifyPetOwnership(petId, userId);
       const allergies = await prisma.allergy.findMany({ where: { petId } });
       return JSON.stringify({ success: true, allergies });
     }
+
     case 'getPetAppointments': {
-      const { petId } = args;
-      if (!petId) throw new Error('Missing parameter: petId');
+      const petId = validateId(args.petId, 'petId');
       await verifyPetOwnership(petId, userId);
-      const appointments = await prisma.appointment.findMany({ 
+      const appointments = await prisma.appointment.findMany({
         where: { petId },
         select: {
-           id: true, dateTime: true, status: true, reason: true,
-           vet: { select: { user: { select: { firstName: true, lastName: true } } } },
-           clinic: { select: { name: true } }
-        }
+          id: true, dateTime: true, status: true, reason: true,
+          vet: { select: { user: { select: { firstName: true, lastName: true } } } },
+          clinic: { select: { name: true } },
+        },
       });
       const mapped = appointments.map(a => ({
         id: a.id, dateTime: a.dateTime, status: a.status, reason: a.reason,
-        vet: `${a.vet.user.firstName} ${a.vet.user.lastName}`, clinic: a.clinic.name
+        vet: `${a.vet.user.firstName} ${a.vet.user.lastName}`, clinic: a.clinic.name,
       }));
       return JSON.stringify({ success: true, appointments: mapped });
     }
+
     case 'find_vet': {
-      const { specialization } = args;
+      // Validate optional specialization — limit length, strip dangerous chars
+      let specialization: string | undefined;
+      if (typeof args.specialization === 'string') {
+        const cleaned = args.specialization.slice(0, 100).replace(/[^a-zA-Z0-9 \-]/g, '').trim();
+        if (cleaned.length > 0) specialization = cleaned;
+      }
+
       const vets = await prisma.veterinarian.findMany({
         where: specialization ? { specialization: { contains: specialization, mode: 'insensitive' } } : {},
         include: {
           user: { select: { firstName: true, lastName: true } },
-          clinics: { include: { clinic: { select: { id: true, name: true } } } }
-        }
+          clinics: { where: { status: 'ACTIVE' }, include: { clinic: { select: { id: true, name: true } } } },
+        },
       });
       const mappedVets = vets.map(v => ({
         id: v.id,
         name: `${v.user.firstName} ${v.user.lastName}`,
         specialization: v.specialization,
-        clinicId: v.clinics?.[0]?.clinicId || null
+        clinicId: v.clinics?.[0]?.clinicId || null,
+        clinicName: v.clinics?.[0]?.clinic?.name || null,
       }));
       return JSON.stringify({ success: true, veterinarians: mappedVets });
     }
+
     case 'check_slots': {
-      const { vetId, date } = args;
-      if (!vetId || !date) throw new Error('Missing parameter: vetId or date');
-      
-      const targetDate = new Date(date);
+      const vetId = validateId(args.vetId, 'vetId');
+      if (!args.date || typeof args.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(args.date)) {
+        throw new Error('Missing or invalid parameter: date (expected YYYY-MM-DD)');
+      }
+
+      // Verify vet exists
+      await verifyVetExists(vetId);
+
       const now = new Date();
-      
-      // We will still allow the current day, but we'll pad past hours as busy
-      const startOfDay = new Date(date);
+      const startOfDay = new Date(args.date);
       startOfDay.setUTCHours(0, 0, 0, 0);
-      const endOfDay = new Date(date);
+      const endOfDay = new Date(args.date);
       endOfDay.setUTCHours(23, 59, 59, 999);
 
       if (endOfDay < now) {
@@ -366,91 +398,113 @@ export async function executeTool(name: string, argsStr: string, userId: string)
         where: {
           vetId,
           dateTime: { gte: startOfDay, lte: endOfDay },
-          status: { in: ['REQUESTED', 'CONFIRMED'] }
+          status: { in: ['REQUESTED', 'CONFIRMED'] },
         },
-        select: { dateTime: true }
+        select: { dateTime: true },
       });
-      
+
       const busySlots = appointments.map(a => a.dateTime);
-      
+
       // Block past hours for today
       for (let i = 0; i < 24; i++) {
         const slotTime = new Date(startOfDay);
         slotTime.setUTCHours(i);
-        if (slotTime <= now) {
-          busySlots.push(slotTime);
-        }
+        if (slotTime <= now) busySlots.push(slotTime);
       }
 
       return JSON.stringify({ success: true, busySlots });
     }
+
     case 'create_booking': {
-      const { petId, vetId, clinicId, dateTime, reason } = args;
-      if (!petId || !vetId || !clinicId || !dateTime || !reason) {
-        throw new Error('Missing required booking parameters');
+      const petId = validateId(args.petId, 'petId');
+      const vetId = validateId(args.vetId, 'vetId');
+      const clinicId = validateId(args.clinicId, 'clinicId');
+
+      if (!args.dateTime || typeof args.dateTime !== 'string') {
+        throw new Error('Missing parameter: dateTime');
       }
+      if (!args.reason || typeof args.reason !== 'string') {
+        throw new Error('Missing parameter: reason');
+      }
+
+      const reason = args.reason.slice(0, 500); // Cap reason length
+
+      // Server-side ownership + existence checks — never trust model-supplied IDs blindly
       await verifyPetOwnership(petId, userId);
-      const apptDate = new Date(dateTime);
+      await verifyVetExists(vetId);
+      await verifyClinicForVet(clinicId, vetId);
+
+      const apptDate = new Date(args.dateTime);
+      if (isNaN(apptDate.getTime())) {
+        return JSON.stringify({ success: false, error: 'INVALID_DATE', message: 'Invalid date/time format.' });
+      }
 
       if (apptDate <= new Date()) {
         return JSON.stringify({ success: false, error: 'PAST_DATE', message: 'That date has already passed — please choose a future date.' });
       }
 
-      // Working hours validation
+      // Working hours validation (9 AM–5 PM Karachi)
       const karachiTime = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: false }).format(apptDate);
       const hour = parseInt(karachiTime);
-      if (hour < 9 || hour > 16) { 
+      if (hour < 9 || hour > 16) {
         return JSON.stringify({ success: false, error: 'OUTSIDE_WORKING_HOURS', message: 'Requested time is outside working hours (9 AM - 5 PM).' });
       }
 
-      // Check double booking
+      // Double-booking check
       const conflict = await prisma.appointment.findFirst({
         where: {
           vetId,
           dateTime: apptDate,
-          status: { in: ['REQUESTED', 'CONFIRMED'] }
-        }
+          status: { in: ['REQUESTED', 'CONFIRMED'] },
+        },
       });
       if (conflict) {
         return JSON.stringify({ success: false, error: 'VET_DOUBLE_BOOKED', message: 'The vet is busy at this slot.' });
       }
 
       const appt = await prisma.appointment.create({
-        data: {
-          petId,
-          ownerId: userId,
-          vetId,
-          clinicId,
-          dateTime: apptDate,
-          reason,
-          status: 'REQUESTED'
-        }
+        data: { petId, ownerId: userId, vetId, clinicId, dateTime: apptDate, reason, status: 'REQUESTED' },
       });
+
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'APPOINTMENT_CREATED',
+          entity: 'Appointment',
+          entityId: appt.id,
+          payload: JSON.stringify({ petId, vetId, clinicId, dateTime: apptDate.toISOString() }),
+        },
+      });
+
       return JSON.stringify({ success: true, appointment: appt });
     }
+
     case 'cancel_appointment': {
-      const { appointmentId } = args;
-      if (!appointmentId) throw new Error('Missing parameter: appointmentId');
-      
+      const appointmentId = validateId(args.appointmentId, 'appointmentId');
+
       const appt = await prisma.appointment.findUnique({ where: { id: appointmentId } });
       if (!appt) {
         return JSON.stringify({ success: false, error: 'NOT_FOUND', message: 'Appointment not found.' });
       }
-      
+
+      // Server-side ownership check — model cannot bypass this
       if (appt.ownerId !== userId) {
         return JSON.stringify({ success: false, error: 'FORBIDDEN', message: 'You are not authorized to cancel this appointment.' });
       }
-      
+
       if (appt.status === 'CANCELLED') {
         return JSON.stringify({ success: false, error: 'ALREADY_CANCELLED', message: 'Appointment is already cancelled.' });
       }
 
+      if (appt.status === 'COMPLETED' || appt.status === 'NO_SHOW') {
+        return JSON.stringify({ success: false, error: 'INVALID_TRANSITION', message: 'Cannot cancel a completed or no-show appointment.' });
+      }
+
       const updatedAppt = await prisma.appointment.update({
         where: { id: appointmentId },
-        data: { status: 'CANCELLED' }
+        data: { status: 'CANCELLED' },
       });
-      
-      // Audit Log
+
       await prisma.auditLog.create({
         data: {
           userId,
@@ -463,6 +517,7 @@ export async function executeTool(name: string, argsStr: string, userId: string)
 
       return JSON.stringify({ success: true, appointment: updatedAppt });
     }
+
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

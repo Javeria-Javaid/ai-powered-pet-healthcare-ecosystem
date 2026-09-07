@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { AppointmentStatus } from '@prisma/client';
+import { checkRateLimit, getRateLimitResetSeconds } from '@/lib/rate-limit';
+
 
 // PUT /api/appointments/[appointmentId] - Confirm, reject, cancel, or reschedule appointments
 export async function PUT(
@@ -10,9 +12,21 @@ export async function PUT(
 ) {
   try {
     const user = await requireAuth();
+
+    // Rate limit: max 20 status mutations per 15 min per user
+    const rateLimitKey = `appointments-update:${user.id}`;
+    if (!checkRateLimit(rateLimitKey, 20, 15 * 60 * 1000)) {
+      const retryAfter = getRateLimitResetSeconds(rateLimitKey);
+      return NextResponse.json(
+        { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again later.' } },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+      );
+    }
+
     const { appointmentId } = await params;
     const body = await req.json();
     const { status, action, dateTime } = body;
+
 
     // Reschedule: owner moves an upcoming appointment to a new future time; status resets to REQUESTED
     if (action === 'RESCHEDULE') {
@@ -185,8 +199,43 @@ export async function PUT(
       );
     }
 
+    // State machine transition validation
+    const currentStatus = appt.status;
+    const targetStatus = status as AppointmentStatus;
+
+    if (currentStatus === targetStatus) {
+      return NextResponse.json(
+        { success: false, error: { code: 'BAD_REQUEST', message: `Appointment is already in ${status} status.` } },
+        { status: 400 }
+      );
+    }
+
+    // Terminal states cannot transition to anything
+    if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(currentStatus)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'BAD_REQUEST', message: `Cannot change status of a ${currentStatus} appointment.` } },
+        { status: 400 }
+      );
+    }
+
+    // Valid transitions from REQUESTED: CONFIRMED, CANCELLED
+    if (currentStatus === 'REQUESTED' && !['CONFIRMED', 'CANCELLED'].includes(targetStatus)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'BAD_REQUEST', message: `Cannot transition directly from REQUESTED to ${targetStatus}.` } },
+        { status: 400 }
+      );
+    }
+
+    // Valid transitions from CONFIRMED: COMPLETED, CANCELLED, NO_SHOW
+    if (currentStatus === 'CONFIRMED' && !['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(targetStatus)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'BAD_REQUEST', message: `Cannot transition from CONFIRMED to ${targetStatus}.` } },
+        { status: 400 }
+      );
+    }
+
     // Double-booking checks during confirmation
-    if (status === 'CONFIRMED') {
+    if (targetStatus === 'CONFIRMED') {
       const conflict = await prisma.appointment.findFirst({
         where: {
           id: { not: appt.id },

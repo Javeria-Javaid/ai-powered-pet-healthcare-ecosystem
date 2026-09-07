@@ -235,6 +235,7 @@ export default function AuthModal({
                       className={inputCls}>
                       <option value="PET_OWNER">Pet Owner</option>
                       <option value="VETERINARIAN">Veterinarian</option>
+                      <option value="CLINIC_ADMIN">Clinic Admin</option>
                     </select>
                   </div>
                 </>

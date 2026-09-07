@@ -53,21 +53,22 @@ export default function ChatWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 font-sans">
+    <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-50 font-sans">
       {/* Floating Action Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="h-14 w-14 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-2xl flex items-center justify-center text-2xl transition cursor-pointer hover:scale-105 active:scale-95"
+        className="h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-2xl flex items-center justify-center text-xl sm:text-2xl transition cursor-pointer hover:scale-105 active:scale-95"
         title="Ask PETIVA AI"
+        aria-label="Ask PETIVA AI"
       >
-        {isOpen ? <X className="inline w-4 h-4" /> : <MessageCircle className="inline w-4 h-4" />}
+        {isOpen ? <X className="inline w-5 h-5 sm:w-6 sm:h-6" /> : <MessageCircle className="inline w-5 h-5 sm:w-6 sm:h-6" />}
       </button>
 
       {/* Floating Panel Popup */}
       {isOpen && (
-        <div className="absolute bottom-16 right-0 w-80 sm:w-96 h-[480px] bg-white border border-zinc-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-200 text-zinc-900">
+        <div className="fixed sm:absolute bottom-20 right-4 sm:right-0 w-[calc(100vw-2rem)] sm:w-96 max-w-sm sm:max-w-md h-[460px] sm:h-[480px] bg-white border border-zinc-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-200 text-zinc-900">
           {/* Header */}
-          <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
+          <div className="bg-blue-600 p-3.5 sm:p-4 text-white flex justify-between items-center shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-xl"><PawPrint className="inline w-4 h-4" /></span>
               <div>

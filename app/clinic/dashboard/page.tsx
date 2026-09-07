@@ -1,5 +1,5 @@
 'use client';
-import { PawPrint, Home, Calendar, Users, Building2, Settings, LogOut, Hand, Clock, Dog, X, Stethoscope } from 'lucide-react';
+import { PawPrint, Home, Calendar, Users, Building2, Settings, LogOut, Hand, Clock, Dog, X, Stethoscope, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
 
 
 import { useState, useEffect } from 'react';
@@ -23,6 +23,27 @@ export default function ClinicDashboard() {
 
   // Navigation tab state
   const [activeNav, setActiveNav] = useState<'dashboard' | 'appointments' | 'vets' | 'profile'>('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('petiva_sidebar_collapsed');
+      if (saved !== null) {
+        setIsSidebarCollapsed(saved === 'true');
+      }
+    } catch {}
+  }, []);
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('petiva_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Loading/Error states
   const [loading, setLoading] = useState(true);
@@ -154,91 +175,200 @@ export default function ClinicDashboard() {
   const upcomingApptsCount = appointments.filter(a => new Date(a.dateTime) > new Date() && a.status !== 'CANCELLED').length;
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc] font-sans text-zinc-900  ">
+    <div className="flex min-h-screen bg-[#f8fafc] font-sans text-zinc-900 flex-col md:flex-row">
       
-      {/* 1. SIDEBAR NAVIGATION */}
-      <aside className="w-60 border-r border-zinc-150 bg-white p-5   flex flex-col justify-between shrink-0 sticky top-0 h-screen overflow-y-auto">
-        <div className="flex flex-col gap-6">
-          {/* Logo Header */}
-          <div className="flex flex-col gap-0.5 px-1 leading-tight">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl"><PawPrint className="inline w-4 h-4" /></span>
-              <span className="text-base font-black tracking-tight text-zinc-900 ">PETIVA</span>
+      {/* MOBILE TOP BAR */}
+      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between bg-white border-b border-zinc-200 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl text-blue-600"><PawPrint className="inline w-5 h-5" /></span>
+          <div>
+            <span className="text-lg font-bold tracking-tight text-zinc-900 leading-none">PETIVA</span>
+            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Clinic Portal</span>
+          </div>
+        </div>
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          className="p-2 rounded-lg text-zinc-600 hover:bg-zinc-100 focus:outline-none"
+          aria-label="Open Navigation Menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      </header>
+
+      {/* MOBILE DRAWER BACKDROP & OVERLAY */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+          <div className="relative w-64 max-w-[80vw] bg-white h-full flex flex-col justify-between p-5 z-10 shadow-2xl overflow-y-auto">
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-0.5 leading-tight">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl text-blue-600"><PawPrint className="inline w-5 h-5" /></span>
+                    <span className="text-base font-black tracking-tight text-zinc-900">PETIVA</span>
+                  </div>
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest pl-7">Clinic Admin</span>
+                </div>
+                <button
+                  onClick={() => setMobileSidebarOpen(false)}
+                  className="p-1 text-zinc-400 hover:text-zinc-700"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Mobile Nav Links */}
+              <nav className="flex flex-col gap-1.5">
+                {[
+                  { id: 'dashboard', label: 'Dashboard', icon: <Home className="w-4 h-4" /> },
+                  { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4" /> },
+                  { id: 'vets', label: 'Veterinarians', icon: <Users className="w-4 h-4" /> },
+                  { id: 'profile', label: 'Clinic Profile', icon: <Building2 className="w-4 h-4" /> },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveNav(item.id as any);
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                      activeNav === item.id
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                        : 'text-zinc-500 hover:bg-zinc-50'
+                    }`}
+                  >
+                    <span>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </nav>
             </div>
-            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest pl-8">Clinic Admin</span>
+
+            {/* Mobile Profile & Logout */}
+            <div className="flex flex-col gap-3 pt-4 border-t border-zinc-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-9 w-9 rounded-full bg-zinc-200 flex items-center justify-center text-sm font-bold">
+                    {adminProfile?.firstName?.[0] || 'C'}
+                  </div>
+                  <div className="text-left leading-tight">
+                    <p className="text-xs font-bold text-zinc-900">{adminProfile?.firstName} {adminProfile?.lastName}</p>
+                    <p className="text-[10px] text-zinc-400 font-medium">Clinic Manager</p>
+                  </div>
+                </div>
+                <button onClick={() => { setActiveNav('profile'); setMobileSidebarOpen(false); }} className="text-zinc-400 hover:text-zinc-600">
+                  <Settings className="w-4 h-4" />
+                </button>
+              </div>
+
+              <button
+                onClick={handleLogout}
+                className="w-full border border-zinc-200 hover:bg-zinc-50 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition text-zinc-700"
+              >
+                <LogOut className="w-4 h-4" /> Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 1. SIDEBAR NAVIGATION (DESKTOP) */}
+      <aside className={`hidden md:flex flex-col justify-between shrink-0 sticky top-0 h-screen border-r border-zinc-150 bg-white transition-all duration-300 ease-in-out z-20 ${
+        isSidebarCollapsed ? 'w-20 p-3' : 'w-60 p-5'
+      }`}>
+        <div className="flex flex-col gap-6">
+          {/* Logo Header + Toggle */}
+          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center flex-col gap-3' : 'justify-between'} px-1`}>
+            <div className="flex flex-col gap-0.5 leading-tight overflow-hidden">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl text-blue-600 shrink-0"><PawPrint className="w-5 h-5" /></span>
+                {!isSidebarCollapsed && (
+                  <span className="text-base font-black tracking-tight text-zinc-900 truncate">PETIVA</span>
+                )}
+              </div>
+              {!isSidebarCollapsed && (
+                <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest pl-7 truncate">Clinic Admin</span>
+              )}
+            </div>
+            <button
+              onClick={toggleSidebar}
+              title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition shrink-0"
+            >
+              {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </button>
           </div>
 
           {/* Links list */}
           <nav className="flex flex-col gap-1.5">
-            <button
-              onClick={() => { setActiveNav('dashboard'); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                activeNav === 'dashboard'
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
-              }`}
-            >
-              <span><Home className="inline w-4 h-4" /></span> Dashboard
-            </button>
-            <button
-              onClick={() => { setActiveNav('appointments'); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                activeNav === 'appointments'
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
-              }`}
-            >
-              <span><Calendar className="inline w-4 h-4" /></span> Appointments
-            </button>
-            <button
-              onClick={() => { setActiveNav('vets'); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                activeNav === 'vets'
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
-              }`}
-            >
-              <span><Users className="inline w-4 h-4" /></span> Veterinarians
-            </button>
-            <button
-              onClick={() => { setActiveNav('profile'); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                activeNav === 'profile'
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-zinc-500 hover:bg-zinc-50 :bg-zinc-800'
-              }`}
-            >
-              <span><Building2 className="inline w-4 h-4" /></span> Clinic Profile
-            </button>
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: <Home className="w-4 h-4 shrink-0" /> },
+              { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4 shrink-0" /> },
+              { id: 'vets', label: 'Veterinarians', icon: <Users className="w-4 h-4 shrink-0" /> },
+              { id: 'profile', label: 'Clinic Profile', icon: <Building2 className="w-4 h-4 shrink-0" /> },
+            ].map((item) => {
+              const isActive = activeNav === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveNav(item.id as any)}
+                  title={isSidebarCollapsed ? item.label : undefined}
+                  className={`w-full flex items-center rounded-xl text-sm font-semibold transition ${
+                    isSidebarCollapsed ? 'justify-center p-3' : 'gap-3 px-3.5 py-2.5'
+                  } ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                      : 'text-zinc-500 hover:bg-zinc-50'
+                  }`}
+                >
+                  <span>{item.icon}</span>
+                  {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
+                </button>
+              );
+            })}
           </nav>
         </div>
 
         {/* User profile & Logout */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between border-t border-zinc-100 pt-4 ">
-            <div className="flex items-center gap-2.5">
-              <div className="h-9 w-9 rounded-full bg-zinc-200  flex items-center justify-center text-sm font-bold">
+          <div className={`flex items-center border-t border-zinc-100 pt-4 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+            <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-2.5 min-w-0'}`}>
+              <div className="h-9 w-9 rounded-full bg-zinc-200 flex items-center justify-center text-sm font-bold shrink-0">
                 {adminProfile?.firstName?.[0] || 'C'}
               </div>
-              <div className="text-left leading-tight">
-                <p className="text-xs font-bold text-zinc-900 ">{adminProfile?.firstName} {adminProfile?.lastName}</p>
-                <p className="text-[10px] text-zinc-400 font-medium">Clinic Manager</p>
-              </div>
+              {!isSidebarCollapsed && (
+                <div className="text-left leading-tight min-w-0">
+                  <p className="text-xs font-bold text-zinc-900 truncate">{adminProfile?.firstName} {adminProfile?.lastName}</p>
+                  <p className="text-[10px] text-zinc-400 font-medium truncate">Clinic Manager</p>
+                </div>
+              )}
             </div>
-            <button onClick={() => { setActiveNav('profile'); }} className="text-zinc-400 hover:text-zinc-600"><Settings className="inline w-4 h-4" /></button>
+            {!isSidebarCollapsed && (
+              <button onClick={() => { setActiveNav('profile'); }} className="text-zinc-400 hover:text-zinc-600 shrink-0">
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           <button
             onClick={handleLogout}
-            className="w-full border border-zinc-200 hover:bg-zinc-50  :bg-zinc-850 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition text-zinc-700 "
+            title={isSidebarCollapsed ? 'Logout' : undefined}
+            className={`w-full border border-zinc-200 hover:bg-zinc-50 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center transition text-zinc-700 ${
+              isSidebarCollapsed ? 'p-2.5' : 'gap-1.5'
+            }`}
           >
-            <LogOut className="inline w-4 h-4" /> Logout
+            <LogOut className="w-4 h-4 shrink-0" />
+            {!isSidebarCollapsed && <span>Logout</span>}
           </button>
         </div>
       </aside>
 
       {/* 2. MAIN WORKSPACE */}
-      <main className="flex-1 p-8 overflow-y-auto max-w-6xl">
+      <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto max-w-full md:max-w-6xl min-w-0">
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-600   ">
             {error}
@@ -546,11 +676,11 @@ export default function ClinicDashboard() {
 
       {/* 3. APPOINTMENT DETAILS DIALOG OVERLAY */}
       {selectedAppt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl   flex flex-col gap-4 text-zinc-900 ">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-md my-auto max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6 shadow-2xl flex flex-col gap-4 text-zinc-900 ">
             <div className="flex justify-between items-center mb-1">
               <h3 className="text-lg font-bold">Appointment Details</h3>
-              <button onClick={() => setSelectedAppt(null)} className="text-zinc-400 hover:text-zinc-600 font-bold"><X className="inline w-4 h-4" /></button>
+              <button onClick={() => setSelectedAppt(null)} className="text-zinc-400 hover:text-zinc-600 font-bold p-1"><X className="inline w-5 h-5" /></button>
             </div>
 
             <div className="flex flex-col gap-3 text-xs leading-relaxed">

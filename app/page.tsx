@@ -64,12 +64,16 @@ export default function Home() {
         try {
           const configRes = await fetch('/api/auth/google/config');
           const configData = await configRes.json();
-          const clientId = configData.clientId;
+          const clientId = configData?.clientId;
 
-          (window as any).google.accounts.id.initialize({
-            client_id: clientId,
-            callback: handleGoogleCallback,
-          });
+          if (clientId && clientId.trim().length > 0) {
+            (window as any).google.accounts.id.initialize({
+              client_id: clientId,
+              callback: handleGoogleCallback,
+            });
+          } else {
+            console.warn('Google Client ID is not configured.');
+          }
         } catch (e) {
           console.error('Failed to load Google OAuth config:', e);
         }

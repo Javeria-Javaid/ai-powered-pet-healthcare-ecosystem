@@ -72,9 +72,10 @@ export default function AuthModal({
       const renderTimer = setTimeout(() => {
         const btnContainer = document.getElementById('google-signin-btn');
         if (btnContainer) {
+          const btnWidth = Math.min(382, Math.max(250, (btnContainer.parentElement?.clientWidth || 320) - 10));
           (window as any).google.accounts.id.renderButton(
             btnContainer,
-            { theme: 'outline', size: 'large', width: 382 }
+            { theme: 'outline', size: 'large', width: btnWidth }
           );
         }
       }, 100);
@@ -157,19 +158,19 @@ export default function AuthModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-md rounded-xl border border-zinc-200 bg-white p-8 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 font-sans text-zinc-900 dark:text-zinc-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
+      <div className="relative w-full max-w-md my-auto max-h-[92vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 sm:p-8 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 font-sans text-zinc-900 dark:text-zinc-50">
 
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+          className="absolute top-4 right-4 p-1 rounded-full text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition"
         >
-          <X className="w-4 h-4" />
+          <X className="w-5 h-5" />
         </button>
 
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-blue-600"><PawPrint className="inline w-4 h-4" /> PETIVA</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-blue-600"><PawPrint className="inline w-6 h-6 mr-1" /> PETIVA</h1>
           <p className="text-sm text-zinc-500 mt-1.5 dark:text-zinc-400">
             {view === 'login' && 'Sign in to access portals'}
             {view === 'register' && 'Create your pet healthcare profile'}

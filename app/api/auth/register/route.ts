@@ -77,6 +77,17 @@ export async function POST(req: NextRequest) {
         firstName,
         lastName,
         phone: typeof phone === 'string' ? phone.slice(0, 30) : undefined,
+        ...(role === 'VETERINARIAN'
+          ? {
+              vetProfile: {
+                create: {
+                  licenseNumber: `LIC-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+                  specialization: 'General Practice',
+                  isVerified: false,
+                },
+              },
+            }
+          : {}),
       },
     });
 
@@ -97,9 +108,15 @@ export async function POST(req: NextRequest) {
     }, { status: 201 });
 
   } catch (err: any) {
-    console.error('Registration API Error:', err.message);
+    console.error('Registration API Error:', err);
     return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'An unexpected error occurred.' } },
+      { 
+        success: false, 
+        error: { 
+          code: 'INTERNAL_SERVER_ERROR', 
+          message: err?.message || 'An unexpected error occurred. Please try again.' 
+        } 
+      },
       { status: 500 }
     );
   }
